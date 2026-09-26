@@ -86,13 +86,18 @@ fi
 sfo="$STAGE/sce_sys/param.sfo"
 "$TOOLS/PkgTool.Core" sfo_new "$sfo"
 set_sfo() { "$TOOLS/PkgTool.Core" sfo_setentry "$sfo" "$1" --type "$2" --maxsize "$3" --value "$4" >/dev/null; }
-set_sfo APP_TYPE Integer 4 1
+# Launch parameters copied from RetroArch for PS4, which uses Piglet with the same modules. With
+# the OpenOrbis sample values (category gd, app type 1, no attributes) the shell's Piglet never
+# returned an EGL display on retail hardware.
+set_sfo APP_TYPE Integer 4 0
 set_sfo APP_VER Utf8 8 "$VERSION"
-set_sfo ATTRIBUTE Integer 4 0
-set_sfo CATEGORY Utf8 4 gd
+set_sfo ATTRIBUTE Integer 4 0x20814016
+set_sfo ATTRIBUTE2 Integer 4 0x6
+set_sfo CATEGORY Utf8 4 gde
 set_sfo CONTENT_ID Utf8 48 "$CONTENT_ID"
 set_sfo DOWNLOAD_DATA_SIZE Integer 4 0
-set_sfo SYSTEM_VER Integer 4 0
+set_sfo FORMAT Utf8 4 obs
+set_sfo SYSTEM_VER Integer 4 0x3fc
 set_sfo TITLE Utf8 128 "$TITLE"
 set_sfo TITLE_ID Utf8 12 "$TITLE_ID"
 set_sfo VERSION Utf8 8 "$VERSION"
