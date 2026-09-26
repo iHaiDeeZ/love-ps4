@@ -1,3 +1,15 @@
+LÖVE for PS4
+============
+
+**This is an unofficial port of LÖVE 11.4 to PS4 homebrew** (OpenOrbis toolchain, no Sony SDK).
+It is not affiliated with or supported by the LÖVE Development Team.
+Build instructions, platform differences and requirements are in [platform/ps4/README.md](platform/ps4/README.md).
+The upstream 11.4 source is imported unmodified in the first commit (tag `upstream-11.4`), so `git diff upstream-11.4` shows every PS4 change.
+
+The original LÖVE readme follows.
+
+---
+
 LÖVE is an *awesome* framework you can use to make 2D games in Lua. It's free, open-source, and works on Windows, macOS, Linux, Android, and iOS.
 
 [![Build Status: Windows](https://ci.appveyor.com/api/projects/status/chc0hdr08wv1d5c7?svg=true)](https://ci.appveyor.com/project/AlexSzpakowski/love)

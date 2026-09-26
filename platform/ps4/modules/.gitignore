@@ -1,0 +1,3 @@
+# Sony system modules supplied by the user (see README). Never commit these.
+*.sprx
+*.prx

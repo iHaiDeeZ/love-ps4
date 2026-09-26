@@ -1,0 +1,52 @@
+diff -ruN a/src/joystick/ps4/SDL_sysjoystick.c b/src/joystick/ps4/SDL_sysjoystick.c
+--- a/src/joystick/ps4/SDL_sysjoystick.c	2026-09-26 08:09:05.321480585 +0300
++++ b/src/joystick/ps4/SDL_sysjoystick.c	2026-09-26 08:09:05.345558170 +0300
+@@ -56,9 +56,9 @@
+         ORBIS_PAD_BUTTON_CIRCLE,    // b:b1
+         ORBIS_PAD_BUTTON_SQUARE,    // x:b2
+         ORBIS_PAD_BUTTON_TRIANGLE,  // y:b3
+-        ORBIS_PAD_BUTTON_OPTIONS,   // back:b4
++        ORBIS_PAD_BUTTON_OPTIONS,   // start:b4
+         ORBIS_PAD_BUTTON_DUMMY,     // guide:b5
+-        ORBIS_PAD_BUTTON_TOUCH_PAD, // start:b6
++        ORBIS_PAD_BUTTON_TOUCH_PAD, // back:b6
+         ORBIS_PAD_BUTTON_L3,        // leftstick:b7
+         ORBIS_PAD_BUTTON_R3,        // rightstick:b8
+         ORBIS_PAD_BUTTON_L1,        // leftshoulder:b9
+@@ -221,12 +221,14 @@
+     unsigned char hat = 0;
+     unsigned char lx, ly, rx, ry, l2, r2;
+     static unsigned int old_buttons[] = {0, 0, 0, 0};
+-    static unsigned char old_lx[] = {0, 0, 0, 0};
+-    static unsigned char old_ly[] = {0, 0, 0, 0};
+-    static unsigned char old_rx[] = {0, 0, 0, 0};
+-    static unsigned char old_ry[] = {0, 0, 0, 0};
+-    static unsigned char old_lt[] = {0, 0, 0, 0};
+-    static unsigned char old_rt[] = {0, 0, 0, 0};
++    /* -1 so the first update always reports every axis: SDL starts axes at 0, which a
++       released trigger (-32768 here) would otherwise only overwrite once it's touched. */
++    static int old_lx[] = {-1, -1, -1, -1};
++    static int old_ly[] = {-1, -1, -1, -1};
++    static int old_rx[] = {-1, -1, -1, -1};
++    static int old_ry[] = {-1, -1, -1, -1};
++    static int old_lt[] = {-1, -1, -1, -1};
++    static int old_rt[] = {-1, -1, -1, -1};
+     OrbisPadData pad;
+ 
+     int index = (int) SDL_JoystickInstanceID(joystick);
+@@ -391,12 +393,13 @@
+     out->x.target = 2;
+     out->y.kind = EMappingKind_Button;
+     out->y.target = 3;
++    /* Options is "start"; the Share button is reserved by the system, so the touchpad click is "back". */
+     out->back.kind = EMappingKind_Button;
+-    out->back.target = 4;
++    out->back.target = 6;
+     //out->guide.kind = EMappingKind_Button;
+     //out->guide.target = 5;
+     out->start.kind = EMappingKind_Button;
+-    out->start.target = 6;
++    out->start.target = 4;
+     out->leftstick.kind = EMappingKind_Button;
+     out->leftstick.target = 7;
+     out->rightstick.kind = EMappingKind_Button;

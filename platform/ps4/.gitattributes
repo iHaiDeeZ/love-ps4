@@ -1,0 +1,3 @@
+# PS4 build scripts run under Linux/WSL: keep LF even with core.autocrlf=true.
+*.sh text eol=lf
+patches/*.patch text eol=lf

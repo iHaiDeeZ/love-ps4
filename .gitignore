@@ -57,3 +57,6 @@ libtool
 stamp-h1
 /src/love
 /src/tags
+
+# PS4 build output (platform/ps4/build.sh)
+/build/
