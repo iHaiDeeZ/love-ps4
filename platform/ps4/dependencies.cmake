@@ -56,5 +56,11 @@ if(LOVE_MPG123)
 	set(LOVE_LINK_LIBRARIES ${LOVE_LINK_LIBRARIES} ${PS4_PORTLIBS}/lib/libmpg123.a)
 endif()
 
+# The libc heap can't initialize on retail consoles; route the malloc family to our own
+# (src/common/ps4_heap.cpp). ps4.cmake links with ld.lld directly, so these are raw linker flags.
+foreach(fn malloc free calloc realloc memalign __memalign)
+	string(APPEND CMAKE_EXE_LINKER_FLAGS " --wrap=${fn}")
+endforeach()
+
 # Required for enet.
 add_definitions(-DHAS_SOCKLEN_T -DHAS_FCNTL)

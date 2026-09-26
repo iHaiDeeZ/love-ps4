@@ -329,6 +329,7 @@ if (PS4)
 		src/common/ps4.cpp
 		src/common/ps4.h
 		src/common/ps4_gl.cpp
+		src/common/ps4_heap.cpp
 	)
 endif()
 
