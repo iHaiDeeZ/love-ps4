@@ -22,6 +22,10 @@
 #include "event/Event.h"
 #include "common/config.h"
 
+#ifdef LOVE_PS4
+#include "common/ps4.h"
+#endif
+
 #ifdef LOVE_BUILD_STANDALONE
 extern "C" int luaopen_love(lua_State * L);
 #endif // LOVE_BUILD_STANDALONE
@@ -50,6 +54,10 @@ void LuaThread::threadFunction()
 
 	lua_State *L = luaL_newstate();
 	luaL_openlibs(L);
+
+#ifdef LOVE_PS4
+	love::ps4::installLuaPrint(L);
+#endif
 
 #ifdef LOVE_BUILD_STANDALONE
 	luax_preload(L, luaopen_love, "love");

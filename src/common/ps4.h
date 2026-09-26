@@ -27,6 +27,8 @@
 
 #include <string>
 
+struct lua_State;
+
 namespace love
 {
 namespace ps4
@@ -59,6 +61,9 @@ void *getGLProcAddress(const char *name);
 
 // Logs EGL error state and free memory; called when the window/GL context can't be created.
 void logGraphicsDiagnostics();
+
+// Replaces Lua's print with one that writes to the log (stdout goes nowhere on PS4).
+void installLuaPrint(lua_State *L);
 
 // Logs the names of all loaded modules.
 void logModules();

@@ -28,6 +28,12 @@
 #include <orbis/SystemService.h>
 #include <orbis/Sysmodule.h>
 
+extern "C"
+{
+#include <lua.h>
+#include <lauxlib.h>
+}
+
 #include <sys/stat.h>
 #include <pthread.h>
 #include <stdarg.h>
@@ -170,6 +176,46 @@ static void sdlLogOutput(void * /*userdata*/, int /*category*/, SDL_LogPriority 
 }
 
 std::string findGame();
+
+// Same output format as Lua's own print (tab-separated tostring of each argument).
+static int w_print(lua_State *L)
+{
+	int n = lua_gettop(L);
+	std::string line;
+	lua_getglobal(L, "tostring");
+	for (int i = 1; i <= n; i++)
+	{
+		lua_pushvalue(L, -1);
+		lua_pushvalue(L, i);
+		lua_call(L, 1, 1);
+		const char *str = lua_tostring(L, -1);
+		if (str == nullptr)
+			return luaL_error(L, "'tostring' must return a string to 'print'");
+		if (i > 1)
+			line += '\t';
+		line += str;
+		lua_pop(L, 1);
+	}
+	lua_pop(L, 1);
+
+	// Long output (tracebacks) is split into lines so klog doesn't truncate it.
+	size_t start = 0;
+	while (start <= line.size())
+	{
+		size_t end = line.find('\n', start);
+		if (end == std::string::npos)
+			end = line.size();
+		log("%s", line.substr(start, end - start).c_str());
+		start = end + 1;
+	}
+	return 0;
+}
+
+void installLuaPrint(lua_State *L)
+{
+	lua_pushcfunction(L, w_print);
+	lua_setglobal(L, "print");
+}
 
 static bool fileExists(const std::string &path)
 {

@@ -162,6 +162,10 @@ static DoneAction runlove(int argc, char **argv, int &retval)
 	lua_State *L = luaL_newstate();
 	luaL_openlibs(L);
 
+#ifdef LOVE_PS4
+	love::ps4::installLuaPrint(L);
+#endif
+
 	// LuaJIT-specific setup needs to be done as early as possible - before
 	// get_app_arguments because that loads external library code. This is also
 	// loaded inside require("love"). Note that it doesn't use the love table.
