@@ -41,8 +41,8 @@ you make games, see [Packaging your own game](#for-game-makers) below.
 ## Controllers
 
 - Up to 4 DualShock 4 controllers are supported.
-- Each controller has to be signed in to a user or a guest (the PS4 asks when you turn a controller
-  on). Sign them all in **before** starting the game.
+- Each controller has to be signed in to a user or a guest; the PS4 asks when you turn a controller
+  on. You can add controllers while a game is running.
 - The PS and Share buttons are used by the system, not the game.
 
 ## Saves and logs
@@ -57,7 +57,7 @@ you make games, see [Packaging your own game](#for-game-makers) below.
 |---|---|
 | The app goes straight back to the home screen | Check that both `.sprx` files are in `/data/love/modules/` with exactly those names. |
 | Blue screen with an error message | The game hit an error; the message says where. Press **Options** to quit. |
-| A controller doesn't respond | Make sure it's signed in to a user or guest, then restart the game. |
+| A controller doesn't respond | Make sure it's signed in to a user or guest. |
 | Anything else | Look at `/data/love/log.txt`. |
 
 ## For game makers

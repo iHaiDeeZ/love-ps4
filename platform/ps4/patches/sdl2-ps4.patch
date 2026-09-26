@@ -1,7 +1,69 @@
 diff -ruN a/src/joystick/ps4/SDL_sysjoystick.c b/src/joystick/ps4/SDL_sysjoystick.c
---- a/src/joystick/ps4/SDL_sysjoystick.c	2026-09-26 16:38:18.415920735 +0300
-+++ b/src/joystick/ps4/SDL_sysjoystick.c	2026-09-26 16:38:18.441229184 +0300
-@@ -56,9 +56,9 @@
+--- a/src/joystick/ps4/SDL_sysjoystick.c	2026-09-26 18:42:43.051106718 +0300
++++ b/src/joystick/ps4/SDL_sysjoystick.c	2026-09-26 18:42:43.072041940 +0300
+@@ -22,17 +22,23 @@
+ 
+ #if SDL_JOYSTICK_PS4
+ 
+-/* This is the PS4 implementation of the SDL joystick API */
++/* This is the PS4 implementation of the SDL joystick API.
++ *
++ * On PS4 every controller belongs to a signed-in user (or guest), so there is one slot per
++ * logged-in user. Detect() polls the login list, opens the pads of new users and reports
++ * them with SDL_PrivateJoystickAdded, and closes/removes pads whose user signed out or whose
++ * controller was disconnected. That way controllers 2-4 work even when they are signed in
++ * after the game started. */
+ #include <orbis/Pad.h>
+ #include <orbis/UserService.h>
+ 
+ #include "../SDL_sysjoystick.h"
++#include "../SDL_joystick_c.h"
+ #include "SDL_events.h"
+ #include "SDL_error.h"
++#include "SDL_timer.h"
+ 
+ #define ORBIS_USER_SERVICE_USER_ID_INVALID 0xFFFFFFFF
+-#define ORBIS_PAD_ERROR_ALREADY_OPENED 0x80920004
+-#define ORBIS_PAD_ERROR_DEVICE_NOT_CONNECTED 0x80920007
+ 
+ #define ORBIS_PAD_BUTTON_DUMMY 0
+ #define ORBIS_PAD_AXIS_LX   0
+@@ -41,24 +47,39 @@
+ #define ORBIS_PAD_AXIS_RY   3
+ #define ORBIS_PAD_AXIS_L2   4
+ #define ORBIS_PAD_AXIS_R2   5
++#define PS4_NUM_AXES        6
++
++/* How often the login list is polled for new/removed controllers. */
++#define PS4_DETECT_INTERVAL_MS 500
+ 
+ extern void PS4_LoadModules();
+ 
+-/* Current pad state */
+-static OrbisPadData pads[ORBIS_USER_SERVICE_MAX_LOGIN_USERS];
+-static int pads_handles[ORBIS_USER_SERVICE_MAX_LOGIN_USERS]; // index: sdl joy number, entry: sce pad handle
++typedef struct PS4Pad {
++    SDL_bool active;        /* pad is open and has been reported to SDL */
++    int32_t userId;
++    int handle;
++    SDL_JoystickID instance;
++    unsigned int old_buttons;
++    int old_axes[PS4_NUM_AXES];
++} PS4Pad;
++
++struct joystick_hwdata {
++    PS4Pad *pad;
++};
+ 
+-static int SDL_numjoysticks = 0;
++static PS4Pad slots[ORBIS_USER_SERVICE_MAX_LOGIN_USERS];
++static Uint32 last_detect = 0;
++static SDL_bool detected_once = SDL_FALSE;
+ 
+-// "Sony DualShock 4 V2" buttons layout
++/* "Sony DualShock 4 V2" buttons layout */
+ static const unsigned int button_map[] = {
+         ORBIS_PAD_BUTTON_CROSS,     // a:b0
          ORBIS_PAD_BUTTON_CIRCLE,    // b:b1
          ORBIS_PAD_BUTTON_SQUARE,    // x:b2
          ORBIS_PAD_BUTTON_TRIANGLE,  // y:b3
@@ -13,37 +75,492 @@ diff -ruN a/src/joystick/ps4/SDL_sysjoystick.c b/src/joystick/ps4/SDL_sysjoystic
          ORBIS_PAD_BUTTON_L3,        // leftstick:b7
          ORBIS_PAD_BUTTON_R3,        // rightstick:b8
          ORBIS_PAD_BUTTON_L1,        // leftshoulder:b9
-@@ -221,12 +221,14 @@
-     unsigned char hat = 0;
-     unsigned char lx, ly, rx, ry, l2, r2;
-     static unsigned int old_buttons[] = {0, 0, 0, 0};
+@@ -71,7 +92,6 @@
+         ORBIS_PAD_BUTTON_R2         // righttrigger:b16
+ };
+ 
+-/* Map analog inputs to -32768 -> 32767 */
+ static int analog_map[256];
+ 
+ typedef struct {
+@@ -79,8 +99,7 @@
+     int y;
+ } point;
+ 
+-/* 4 points define the bezier-curve. */
+-/* The Vita has a good amount of analog travel, so use a linear curve */
++/* 4 points define the bezier-curve. A linear curve works well for the DS4. */
+ static point a = {0, 0};
+ static point b = {0, 0};
+ static point c = {128, 32767};
+@@ -104,45 +123,115 @@
+     return dest.y;
+ }
+ 
++static SDL_bool PS4_IsLoggedIn(const OrbisUserServiceLoginUserIdList *users, int32_t userId) {
++    int i;
++    for (i = 0; i < ORBIS_USER_SERVICE_MAX_LOGIN_USERS; i++) {
++        if (users->userId[i] == userId) {
++            return SDL_TRUE;
++        }
++    }
++    return SDL_FALSE;
++}
++
++static SDL_bool PS4_HasPadForUser(int32_t userId) {
++    int i;
++    for (i = 0; i < ORBIS_USER_SERVICE_MAX_LOGIN_USERS; i++) {
++        if (slots[i].active && slots[i].userId == userId) {
++            return SDL_TRUE;
++        }
++    }
++    return SDL_FALSE;
++}
++
++static void PS4_RemovePad(PS4Pad *pad) {
++    SDL_Log("PS4_JoystickDetect: controller removed (user 0x%x, instance %i)\n",
++            (unsigned int) pad->userId, (int) pad->instance);
++    scePadClose(pad->handle);
++    pad->active = SDL_FALSE;
++    SDL_PrivateJoystickRemoved(pad->instance);
++}
++
++/* The index-th open pad, in slot order. */
++static PS4Pad *PS4_GetPad(int device_index) {
++    int i;
++    for (i = 0; i < ORBIS_USER_SERVICE_MAX_LOGIN_USERS; i++) {
++        if (slots[i].active) {
++            if (device_index == 0) {
++                return &slots[i];
++            }
++            device_index--;
++        }
++    }
++    return NULL;
++}
++
+ void PS4_JoystickDetect() {
+-    uint32_t ret, i;
+-    int pad_handle;
+     OrbisUserServiceLoginUserIdList users;
+-    SDL_numjoysticks = 0;
++    Uint32 now = SDL_GetTicks();
++    int i, j;
+ 
+-    ret = sceUserServiceGetLoginUserIdList(&users);
+-    if (ret != 0) {
+-        SDL_Log("PS4_JoystickDetect: sceUserServiceGetLoginUserIdList failed (0x%08x)\n", ret);
++    if (detected_once && !SDL_TICKS_PASSED(now, last_detect + PS4_DETECT_INTERVAL_MS)) {
+         return;
+     }
++    detected_once = SDL_TRUE;
++    last_detect = now;
+ 
++    if (sceUserServiceGetLoginUserIdList(&users) != 0) {
++        return;
++    }
++
++    /* Drop pads whose user signed out. A controller that's switched off stays assigned to its
++       user (like in PS4 games) and simply reads as idle; OrbisPadData.connected can't be used
++       to detect that, it read 0 for a connected second controller on hardware. */
+     for (i = 0; i < ORBIS_USER_SERVICE_MAX_LOGIN_USERS; i++) {
+-        if (users.userId[i] == ORBIS_USER_SERVICE_USER_ID_INVALID) {
+-            continue;
++        if (slots[i].active && !PS4_IsLoggedIn(&users, slots[i].userId)) {
++            PS4_RemovePad(&slots[i]);
+         }
++    }
+ 
+-        pad_handle = scePadOpen(users.userId[i], 0, 0, NULL);
+-        if (pad_handle == ORBIS_PAD_ERROR_DEVICE_NOT_CONNECTED) {
+-            //SDL_Log("PS4_JoystickDetect: scePadOpen(%i) == ORBIS_PAD_ERROR_DEVICE_NOT_CONNECTED\n", i);
++    /* Open the controllers of newly signed-in users. */
++    for (i = 0; i < ORBIS_USER_SERVICE_MAX_LOGIN_USERS; i++) {
++        int32_t userId = users.userId[i];
++        int handle;
++        PS4Pad *pad = NULL;
++
++        if (userId == (int32_t) ORBIS_USER_SERVICE_USER_ID_INVALID || PS4_HasPadForUser(userId)) {
+             continue;
+         }
+-        if (pad_handle == ORBIS_PAD_ERROR_ALREADY_OPENED) {
+-            //SDL_Log("PS4_JoystickDetect: scePadOpen(%i) == ORBIS_PAD_ERROR_ALREADY_OPENED\n", i);
+-            SDL_numjoysticks++;
++
++        handle = scePadOpen(userId, 0, 0, NULL);
++        if (handle < 0) {
++            continue; /* no controller for this user (yet) */
++        }
++
++        for (j = 0; j < ORBIS_USER_SERVICE_MAX_LOGIN_USERS; j++) {
++            if (!slots[j].active) {
++                pad = &slots[j];
++                break;
++            }
++        }
++        if (pad == NULL) {
++            scePadClose(handle);
+             continue;
+         }
+ 
+-        pads_handles[i] = pad_handle;
+-        SDL_numjoysticks++;
+-        SDL_Log("PS4_JoystickDetect: new joystick detected (%i) (joysticks count: %i)\n",
+-                i, SDL_numjoysticks);
++        SDL_zerop(pad);
++        pad->active = SDL_TRUE;
++        pad->userId = userId;
++        pad->handle = handle;
++        pad->instance = SDL_GetNextJoystickInstanceID();
++        /* -1 so the first update reports every axis: SDL starts axes at 0, which a released
++           trigger (-32768 here) would otherwise only overwrite once it's touched. */
++        for (j = 0; j < PS4_NUM_AXES; j++) {
++            pad->old_axes[j] = -1;
++        }
++
++        SDL_Log("PS4_JoystickDetect: controller added (user 0x%x, instance %i)\n",
++                (unsigned int) userId, (int) pad->instance);
++        SDL_PrivateJoystickAdded(pad->instance);
+     }
+ }
+ 
+-/* Function to scan the system for joysticks.
+- * Joystick 0 should be the system default joystick.
+- * It should return number of joysticks, or -1 on an unrecoverable fatal error.
+- */
+ int PS4_JoystickInit(void) {
+     int i;
+     uint32_t ret;
+@@ -163,27 +252,30 @@
+         analog_map[127 - i] = -1 * analog_map[i + 128];
+     }
+ 
++    SDL_zero(slots);
++    detected_once = SDL_FALSE;
+     PS4_JoystickDetect();
+ 
+-    return SDL_numjoysticks;
++    return 0;
+ }
+ 
+ int PS4_JoystickGetCount() {
+-    return SDL_numjoysticks;
++    int i, count = 0;
++    for (i = 0; i < ORBIS_USER_SERVICE_MAX_LOGIN_USERS; i++) {
++        if (slots[i].active) {
++            count++;
++        }
++    }
++    return count;
+ }
+ 
+-/* Function to perform the mapping from device index to the instance id for this index */
+ SDL_JoystickID PS4_JoystickGetDeviceInstanceID(int device_index) {
+-    return device_index;
++    PS4Pad *pad = PS4_GetPad(device_index);
++    return pad ? pad->instance : -1;
+ }
+ 
+-/* Function to get the device-dependent name of a joystick */
+-const char *PS4_JoystickGetDeviceName(int index) {
+-    if (index > ORBIS_USER_SERVICE_MAX_LOGIN_USERS) {
+-        return NULL;
+-    } else {
+-        return "Sony DualShock 4 V2";
+-    }
++const char *PS4_JoystickGetDeviceName(int device_index) {
++    return PS4_GetPad(device_index) ? "Sony DualShock 4 V2" : NULL;
+ }
+ 
+ static int
+@@ -195,154 +287,134 @@
+ PS4_JoystickSetDevicePlayerIndex(int device_index, int player_index) {
+ }
+ 
+-/* Function to open a joystick for use.
+-   The joystick to open is specified by the device index.
+-   This should fill the nbuttons and naxes fields of the joystick structure.
+-   It returns 0, or -1 if there is an error.
+- */
++SDL_JoystickGUID PS4_JoystickGetDeviceGUID(int device_index) {
++    SDL_JoystickGUID guid;
++    /* the GUID is just the first 16 chars of the name for now */
++    const char *name = "Sony DualShock 4 V2";
++    SDL_zero(guid);
++    SDL_memcpy(&guid, name, SDL_min(sizeof(guid), SDL_strlen(name)));
++    return guid;
++}
++
+ int PS4_JoystickOpen(SDL_Joystick *joystick, int device_index) {
++    PS4Pad *pad = PS4_GetPad(device_index);
++    if (pad == NULL) {
++        return SDL_SetError("PS4_JoystickOpen: no controller at index %i", device_index);
++    }
++
++    joystick->hwdata = (struct joystick_hwdata *) SDL_calloc(1, sizeof(struct joystick_hwdata));
++    if (joystick->hwdata == NULL) {
++        return SDL_OutOfMemory();
++    }
++    joystick->hwdata->pad = pad;
++
+     joystick->nbuttons = SDL_arraysize(button_map);
+-    joystick->naxes = 6;
++    joystick->naxes = PS4_NUM_AXES;
+     joystick->nhats = 1;
+-    joystick->instance_id = device_index;
++
++    /* Report the current state on the first update. */
++    pad->old_buttons = 0;
++    SDL_memset(pad->old_axes, 0xFF, sizeof(pad->old_axes));
+ 
+     return 0;
+ }
+ 
+-/* Function to update the state of a joystick - called as a device poll.
+- * This function shouldn't update the joystick structure directly,
+- * but instead should call SDL_PrivateJoystick*() to deliver events
+- * and update joystick device state.
+- */
++static PS4Pad *PS4_GetOpenPad(SDL_Joystick *joystick) {
++    PS4Pad *pad = joystick->hwdata ? joystick->hwdata->pad : NULL;
++    /* the slot may have been reused by another controller since */
++    if (pad == NULL || !pad->active || pad->instance != joystick->instance_id) {
++        return NULL;
++    }
++    return pad;
++}
++
++static void PS4_UpdateAxis(SDL_Joystick *joystick, PS4Pad *pad, int axis, unsigned char value) {
++    if (pad->old_axes[axis] != value) {
++        SDL_PrivateJoystickAxis(joystick, axis, analog_map[value]);
++        pad->old_axes[axis] = value;
++    }
++}
++
+ static void PS4_JoystickUpdate(SDL_Joystick *joystick) {
++    OrbisPadData data;
++    unsigned int buttons, changed;
+     int i;
+-    unsigned int buttons;
+-    unsigned int changed;
+-    unsigned char hat = 0;
+-    unsigned char lx, ly, rx, ry, l2, r2;
+-    static unsigned int old_buttons[] = {0, 0, 0, 0};
 -    static unsigned char old_lx[] = {0, 0, 0, 0};
 -    static unsigned char old_ly[] = {0, 0, 0, 0};
 -    static unsigned char old_rx[] = {0, 0, 0, 0};
 -    static unsigned char old_ry[] = {0, 0, 0, 0};
 -    static unsigned char old_lt[] = {0, 0, 0, 0};
 -    static unsigned char old_rt[] = {0, 0, 0, 0};
-+    /* -1 so the first update always reports every axis: SDL starts axes at 0, which a
-+       released trigger (-32768 here) would otherwise only overwrite once it's touched. */
-+    static int old_lx[] = {-1, -1, -1, -1};
-+    static int old_ly[] = {-1, -1, -1, -1};
-+    static int old_rx[] = {-1, -1, -1, -1};
-+    static int old_ry[] = {-1, -1, -1, -1};
-+    static int old_lt[] = {-1, -1, -1, -1};
-+    static int old_rt[] = {-1, -1, -1, -1};
-     OrbisPadData pad;
+-    OrbisPadData pad;
+-
+-    int index = (int) SDL_JoystickInstanceID(joystick);
+-    if (index > ORBIS_USER_SERVICE_MAX_LOGIN_USERS) {
+-        SDL_Log("PS4_JoystickUpdate: invalid joystick index: %i\n", index);
++    PS4Pad *pad = PS4_GetOpenPad(joystick);
++
++    if (pad == NULL) {
+         return;
+     }
  
-     int index = (int) SDL_JoystickInstanceID(joystick);
-@@ -391,12 +393,13 @@
+-    if (pads_handles[index] < 1) {
+-        SDL_Log("PS4_JoystickUpdate: invalid pad handle: %i\n", index);
++    SDL_zero(data);
++    if (scePadReadState(pad->handle, &data) != 0) {
+         return;
+     }
+ 
+-    pad = pads[index];
+-    scePadReadState(pads_handles[index], &pad);
+-
+-    buttons = pad.buttons;
+-
+-    lx = pad.leftStick.x;
+-    ly = pad.leftStick.y;
+-    rx = pad.rightStick.x;
+-    ry = pad.rightStick.y;
+-    l2 = pad.analogButtons.l2;
+-    r2 = pad.analogButtons.r2;
+-
+-    // Axes
+-    if (old_lx[index] != lx) {
+-        SDL_PrivateJoystickAxis(joystick, ORBIS_PAD_AXIS_LX, analog_map[lx]);
+-        old_lx[index] = lx;
+-    }
+-    if (old_ly[index] != ly) {
+-        SDL_PrivateJoystickAxis(joystick, ORBIS_PAD_AXIS_LY, analog_map[ly]);
+-        old_ly[index] = ly;
+-    }
+-    if (old_rx[index] != rx) {
+-        SDL_PrivateJoystickAxis(joystick, ORBIS_PAD_AXIS_RX, analog_map[rx]);
+-        old_rx[index] = rx;
+-    }
+-    if (old_ry[index] != ry) {
+-        SDL_PrivateJoystickAxis(joystick, ORBIS_PAD_AXIS_RY, analog_map[ry]);
+-        old_ry[index] = ry;
+-    }
+-    if (old_lt[index] != l2) {
+-        SDL_PrivateJoystickAxis(joystick, ORBIS_PAD_AXIS_L2, analog_map[l2]);
+-        old_lt[index] = l2;
+-    }
+-    if (old_rt[index] != r2) {
+-        SDL_PrivateJoystickAxis(joystick, ORBIS_PAD_AXIS_R2, analog_map[r2]);
+-        old_rt[index] = r2;
+-    }
+-
+-    // Buttons
+-    changed = old_buttons[index] ^ buttons;
+-    old_buttons[index] = buttons;
++    PS4_UpdateAxis(joystick, pad, ORBIS_PAD_AXIS_LX, data.leftStick.x);
++    PS4_UpdateAxis(joystick, pad, ORBIS_PAD_AXIS_LY, data.leftStick.y);
++    PS4_UpdateAxis(joystick, pad, ORBIS_PAD_AXIS_RX, data.rightStick.x);
++    PS4_UpdateAxis(joystick, pad, ORBIS_PAD_AXIS_RY, data.rightStick.y);
++    PS4_UpdateAxis(joystick, pad, ORBIS_PAD_AXIS_L2, data.analogButtons.l2);
++    PS4_UpdateAxis(joystick, pad, ORBIS_PAD_AXIS_R2, data.analogButtons.r2);
++
++    buttons = data.buttons;
++    changed = pad->old_buttons ^ buttons;
++    pad->old_buttons = buttons;
+ 
+     if (changed) {
++        const unsigned int dpad = ORBIS_PAD_BUTTON_UP | ORBIS_PAD_BUTTON_DOWN | ORBIS_PAD_BUTTON_LEFT | ORBIS_PAD_BUTTON_RIGHT;
++
+         for (i = 0; i < SDL_arraysize(button_map); i++) {
+-            if (changed & button_map[i]) {
+-                SDL_PrivateJoystickButton(
+-                        joystick, i, (buttons & button_map[i]) ? SDL_PRESSED : SDL_RELEASED);
+-                // handle hat
+-                if (i == 11 && (buttons & button_map[i])) {
+-                    hat |= SDL_HAT_UP;
+-                } else if (i == 12 && (buttons & button_map[i])) {
+-                    hat |= SDL_HAT_DOWN;
+-                } else if (i == 13 && (buttons & button_map[i])) {
+-                    hat |= SDL_HAT_LEFT;
+-                } else if (i == 14 && (buttons & button_map[i])) {
+-                    hat |= SDL_HAT_RIGHT;
+-                }
++            if (button_map[i] != ORBIS_PAD_BUTTON_DUMMY && (changed & button_map[i])) {
++                SDL_PrivateJoystickButton(joystick, i, (buttons & button_map[i]) ? SDL_PRESSED : SDL_RELEASED);
+             }
+         }
+-        // send hat events now
+-        SDL_PrivateJoystickHat(joystick, 0, hat);
++
++        /* The hat reflects every D-pad direction currently held. */
++        if (changed & dpad) {
++            Uint8 hat = SDL_HAT_CENTERED;
++            if (buttons & ORBIS_PAD_BUTTON_UP) {
++                hat |= SDL_HAT_UP;
++            }
++            if (buttons & ORBIS_PAD_BUTTON_DOWN) {
++                hat |= SDL_HAT_DOWN;
++            }
++            if (buttons & ORBIS_PAD_BUTTON_LEFT) {
++                hat |= SDL_HAT_LEFT;
++            }
++            if (buttons & ORBIS_PAD_BUTTON_RIGHT) {
++                hat |= SDL_HAT_RIGHT;
++            }
++            SDL_PrivateJoystickHat(joystick, 0, hat);
++        }
+     }
+ }
+ 
+-/* Function to close a joystick after use */
++/* Function to close a joystick after use. The pad itself stays open: Detect() owns it. */
+ void PS4_JoystickClose(SDL_Joystick *joystick) {
+-    int index = (int) SDL_JoystickInstanceID(joystick);
+-    if (index > ORBIS_USER_SERVICE_MAX_LOGIN_USERS) {
+-        SDL_Log("PS4_JoystickClose: invalid joystick index: %i\n", index);
+-        return;
+-    }
+-
+-    if (pads_handles[index] < 1) {
+-        SDL_Log("PS4_JoystickClose: invalid pad handle: 0x%08x\n", index);
+-        return;
+-    }
+-
+-    scePadClose(pads_handles[index]);
++    SDL_free(joystick->hwdata);
++    joystick->hwdata = NULL;
+ }
+ 
+-/* Function to perform any system-specific joystick related cleanup */
+ void PS4_JoystickQuit(void) {
+-}
+-
+-SDL_JoystickGUID PS4_JoystickGetDeviceGUID(int device_index) {
+-    SDL_JoystickGUID guid;
+-    /* the GUID is just the first 16 chars of the name for now */
+-    const char *name = PS4_JoystickGetDeviceName(device_index);
+-    SDL_zero(guid);
+-    SDL_memcpy(&guid, name, SDL_min(sizeof(guid), SDL_strlen(name)));
+-    return guid;
++    int i;
++    for (i = 0; i < ORBIS_USER_SERVICE_MAX_LOGIN_USERS; i++) {
++        if (slots[i].active) {
++            scePadClose(slots[i].handle);
++        }
++    }
++    SDL_zero(slots);
++    detected_once = SDL_FALSE;
+ }
+ 
+ static int
+ PS4_JoystickRumble(SDL_Joystick *joystick, Uint16 low_frequency_rumble, Uint16 high_frequency_rumble) {
+-    int index = (int) SDL_JoystickInstanceID(joystick);
+-    if (index > ORBIS_USER_SERVICE_MAX_LOGIN_USERS) {
+-        return SDL_SetError("PS4_JoystickRumble: invalid joystick index: %i\n", index);
+-    }
+-
++    PS4Pad *pad = PS4_GetOpenPad(joystick);
+     OrbisPadVibeParam param = {high_frequency_rumble / 256, low_frequency_rumble / 256};
+-    scePadSetVibration(pads_handles[index], &param);
+-
++    if (pad == NULL) {
++        return SDL_SetError("PS4_JoystickRumble: controller not available");
++    }
++    scePadSetVibration(pad->handle, &param);
+     return 0;
+ }
+ 
+@@ -353,21 +425,17 @@
+ 
+ static Uint32
+ PS4_JoystickGetCapabilities(SDL_Joystick *joystick) {
+-    // always return LED and rumble supported for now
+     return SDL_JOYCAP_LED | SDL_JOYCAP_RUMBLE;
+ }
+ 
+-
+ static int
+ PS4_JoystickSetLED(SDL_Joystick *joystick, Uint8 red, Uint8 green, Uint8 blue) {
+-    int index = (int) SDL_JoystickInstanceID(joystick);
+-    if (index > ORBIS_USER_SERVICE_MAX_LOGIN_USERS) {
+-        return SDL_SetError("PS4_JoystickSetLED: invalid joystick index: %i\n", index);
+-    }
+-
++    PS4Pad *pad = PS4_GetOpenPad(joystick);
+     OrbisPadColor color = {red, green, blue, 255};
+-    scePadSetLightBar(pads_handles[index], &color);
+-
++    if (pad == NULL) {
++        return SDL_SetError("PS4_JoystickSetLED: controller not available");
++    }
++    scePadSetLightBar(pad->handle, &color);
+     return 0;
+ }
+ 
+@@ -391,12 +459,11 @@
      out->x.target = 2;
      out->y.kind = EMappingKind_Button;
      out->y.target = 3;
 +    /* Options is "start"; the Share button is reserved by the system, so the touchpad click is "back". */
      out->back.kind = EMappingKind_Button;
 -    out->back.target = 4;
+-    //out->guide.kind = EMappingKind_Button;
+-    //out->guide.target = 5;
 +    out->back.target = 6;
-     //out->guide.kind = EMappingKind_Button;
-     //out->guide.target = 5;
      out->start.kind = EMappingKind_Button;
 -    out->start.target = 6;
 +    out->start.target = 4;
@@ -51,8 +568,8 @@ diff -ruN a/src/joystick/ps4/SDL_sysjoystick.c b/src/joystick/ps4/SDL_sysjoystic
      out->leftstick.target = 7;
      out->rightstick.kind = EMappingKind_Button;
 diff -ruN a/src/video/ps4/SDL_ps4piglet.c b/src/video/ps4/SDL_ps4piglet.c
---- a/src/video/ps4/SDL_ps4piglet.c	2026-09-26 16:38:18.427867544 +0300
-+++ b/src/video/ps4/SDL_ps4piglet.c	2026-09-26 16:38:18.474002652 +0300
+--- a/src/video/ps4/SDL_ps4piglet.c	2026-09-26 18:42:43.059332177 +0300
++++ b/src/video/ps4/SDL_ps4piglet.c	2026-09-26 18:42:43.067037306 +0300
 @@ -177,14 +177,21 @@
      }
  

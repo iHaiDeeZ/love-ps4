@@ -15,7 +15,7 @@ Mari0.
 | | |
 |---|---|
 | Graphics | OpenGL ES 2.0 via Piglet. **Needs the shader compiler modules**, see below. The window is always fullscreen at the TV resolution (1920×1080); `love.window.setMode` sizes are ignored, and games should scale to `love.graphics.getDimensions()`. |
-| Input | Up to 4 DualShock 4 controllers through the gamepad API (`love.gamepadpressed`, `Joystick:isGamepadDown`, …). No keyboard, mouse or touch. On PS4 every controller belongs to a signed-in user or guest: sign all of them in **before** starting the app (controllers added later are not detected yet). |
+| Input | Up to 4 DualShock 4 controllers through the gamepad API (`love.gamepadpressed`, `Joystick:isGamepadDown`, …). No keyboard, mouse or touch. On PS4 every controller belongs to a signed-in user or guest. Controllers signed in while the game runs are reported with `love.joystickadded`; one is removed when its user signs out. |
 | Audio | OpenAL Soft on SDL2 audio; Ogg Vorbis, MP3, tracker modules and WAV. |
 | Lua | LuaJIT 2.1, **interpreter only**. Consoles don't allow JIT code, so `jit.status()` returns false and `jit.on()` raises an error. The `bit` library and FFI data types (`ffi.new`, `ffi.cast`) are available; `ffi.C` symbol lookup isn't. |
 | Filesystem | The game is read from the package (`/app0`). Saves go to `/data/love/<identity>`. |
@@ -111,6 +111,8 @@ Things done differently from other platforms:
   `create-fself` rejects unresolved imports.
 - The Piglet core GLES2 entry points are also available from a static table (`ps4_gl.cpp`),
   since `eglGetProcAddress` isn't required to return them.
-- SDL2 is rebuilt from PacBrew's PS4 fork with `patches/sdl2-ps4.patch`, which puts Options on
-  `start` (it was swapped with the touchpad) and reports released triggers as 0 from the first
-  frame.
+- SDL2 is rebuilt from PacBrew's PS4 fork with `patches/sdl2-ps4.patch`. The patch configures Piglet
+  like RetroArch does, and replaces the controller driver. The new driver opens the pad of every
+  signed-in user, including users who sign in while the game runs, and keeps each controller in
+  its own slot. It also maps Options to `start` (it was swapped with the touchpad), reports
+  released triggers as 0 from the first frame, and reports D-pad diagonals correctly.
