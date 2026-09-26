@@ -46,6 +46,7 @@ int32_t sceKernelDebugOutText(int32_t channel, const char *fmt, ...);
 int32_t sceKernelAvailableFlexibleMemorySize(size_t *size);
 int32_t sceKernelReserveVirtualRange(void **addr, size_t len, int32_t flags, size_t alignment);
 int32_t sceKernelMapNamedFlexibleMemory(void **addr, size_t len, int32_t prot, int32_t flags, const char *name);
+int32_t sceKernelMapNamedSystemFlexibleMemory(void **addr, size_t len, int32_t prot, int32_t flags, const char *name);
 size_t sceKernelGetDirectMemorySize(void);
 int32_t sceKernelAvailableDirectMemorySize(int64_t start, int64_t end, size_t alignment, int64_t *startOut, size_t *sizeOut);
 
@@ -72,12 +73,38 @@ void heapLog(const char *fmt, Args... args)
 }
 const size_t PAGE = 16 * 1024;
 
-// Flexible memory left for the system libraries after the heap is made. Piglet (OpenGL ES) is
-// configured by SDL with 256 MiB of shared system memory; with only 64 MiB left, eglGetDisplay
-// failed on hardware.
-const size_t RESERVE_FOR_SYSTEM = 256 * MB;
+// When the heap has to come out of the app's regular flexible memory, leave this much for Piglet
+// (OpenGL ES): SDL configures it with 256 MiB of shared system memory plus command buffers, and
+// with 256 MiB left eglGetDisplay still failed on hardware.
+const size_t RESERVE_FOR_SYSTEM = 320 * MB;
+
+const int32_t PROT_CPU_RW = 0x3;
+const int32_t MAP_FIXED_FLAG = 0x10;
 
 void *heap = nullptr;
+
+void *mapAndCreate(bool systemPool, size_t size)
+{
+	void *base = nullptr;
+	if (sceKernelReserveVirtualRange(&base, size, 0, PAGE) != 0)
+		return nullptr;
+
+	int32_t ret = systemPool
+		? sceKernelMapNamedSystemFlexibleMemory(&base, size, PROT_CPU_RW, MAP_FIXED_FLAG, "love heap")
+		: sceKernelMapNamedFlexibleMemory(&base, size, PROT_CPU_RW, MAP_FIXED_FLAG, "love heap");
+	if (ret != 0)
+	{
+		// The leaked VA reservation doesn't matter in a 47-bit address space.
+		heapLog("[love] heap: mapping %zu MiB of %s flexible memory failed (0x%x)\n",
+			size / MB, systemPool ? "system" : "regular", ret);
+		return nullptr;
+	}
+
+	void *msp = sceLibcMspaceCreate("love heap", base, size, 0);
+	if (msp != nullptr)
+		heapLog("[love] heap: %zu MiB of %s flexible memory at %p\n", size / MB, systemPool ? "system" : "regular", base);
+	return msp;
+}
 
 void *createHeap()
 {
@@ -85,35 +112,23 @@ void *createHeap()
 	int32_t ret = sceKernelAvailableFlexibleMemorySize(&available);
 	heapLog("[love] heap: available flexible memory: %zu MiB (ret 0x%x)\n", available / MB, ret);
 
-	size_t size = 1024 * MB;
-	if (ret == 0 && available > RESERVE_FOR_SYSTEM)
+	// Preferred: the system flexible memory pool, like the libc heap (which asks for an
+	// impossible 2.5 GiB). That leaves all of the regular flexible memory to Piglet.
+	const size_t systemSizes[] = {1024 * MB, 768 * MB, 512 * MB, 384 * MB, 256 * MB, 192 * MB, 128 * MB};
+	for (size_t size : systemSizes)
 	{
-		size_t usable = (available - RESERVE_FOR_SYSTEM) & ~(PAGE - 1);
-		if (usable < size)
-			size = usable;
+		if (void *msp = mapAndCreate(true, size))
+			return msp;
 	}
 
-	// Take the biggest region we can get, halving down to 32 MiB.
+	// Fallback: regular flexible memory, keeping enough back for Piglet.
+	size_t size = 0;
+	if (ret == 0 && available > RESERVE_FOR_SYSTEM + 32 * MB)
+		size = (available - RESERVE_FOR_SYSTEM) & ~(PAGE - 1);
 	for (; size >= 32 * MB; size = (size / 2) & ~(PAGE - 1))
 	{
-		void *base = nullptr;
-		if (sceKernelReserveVirtualRange(&base, size, 0, PAGE) != 0)
-			continue;
-
-		// 0x3 = CPU read/write.
-		ret = sceKernelMapNamedFlexibleMemory(&base, size, 0x3, 0, "love heap");
-		if (ret != 0)
-		{
-			heapLog("[love] heap: mapping %zu MiB failed (0x%x)\n", size / MB, ret);
-			continue; // The leaked VA reservation doesn't matter in a 47-bit address space.
-		}
-
-		void *msp = sceLibcMspaceCreate("love heap", base, size, 0);
-		if (msp != nullptr)
-		{
-			heapLog("[love] heap: %zu MiB at %p\n", size / MB, base);
+		if (void *msp = mapAndCreate(false, size))
 			return msp;
-		}
 	}
 
 	heapLog("[love] heap: could not create a heap, out of memory\n");
