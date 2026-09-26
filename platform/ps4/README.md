@@ -14,12 +14,29 @@ It runs unmodified LÖVE 11.x games, with the platform differences listed below.
 Requirements for running: a PS4 with a homebrew-enabled firmware and GoldHEN (or similar)
 to install fake-signed packages.
 
+## Installing a release
+
+Each [release](https://github.com/iHaiDeeZ/love-ps4/releases) has:
+
+- `IV0000-LOVE00000_00-LOVE000000000000.pkg`: the LÖVE runtime. It runs `/data/love/game.love`
+  (or `/data/love/game/main.lua`) if present, otherwise it shows the no-game screen.
+- `IV0000-LOVE00001_00-LOVETEST00000000.pkg`: the PS4 test app (`platform/ps4/test`). It checks
+  rendering and shows the live state of every connected controller. Hold Options to quit.
+- `ps4-test.love`: the same test app as a game file for the runtime.
+
+The packages don't contain the Sony shader compiler modules (see below). Copy
+`libScePigletv2VSH.sprx` and `libSceShaccVSH.sprx` to **`/data/love/modules/`** on the console
+(for example with GoldHEN's FTP server) before starting them.
+
+To run your own game, copy it to `/data/love/game.love` and start LÖVE. To make a standalone
+package for it, see [Packaging a game](#packaging-a-game).
+
 ## What works / what's different on PS4
 
 | | |
 |---|---|
 | Graphics | OpenGL ES 2.0 via Piglet. **Needs the shader compiler modules**, see below. The window is always fullscreen at the TV resolution (1920×1080); `love.window.setMode` sizes are ignored, and games should scale to `love.graphics.getDimensions()`. |
-| Input | Up to 4 DualShock 4 controllers through the gamepad API (`love.gamepadpressed`, `Joystick:isGamepadDown`, …). No keyboard, mouse or touch. |
+| Input | Up to 4 DualShock 4 controllers through the gamepad API (`love.gamepadpressed`, `Joystick:isGamepadDown`, …). No keyboard, mouse or touch. On PS4 every controller belongs to a signed-in user or guest: sign all of them in **before** starting the app (controllers added later are not detected yet). |
 | Audio | OpenAL Soft on SDL2 audio; Ogg Vorbis, MP3, tracker modules and WAV. |
 | Lua | LuaJIT 2.1, **interpreter only**. Consoles don't allow JIT code, so `jit.status()` returns false and `jit.on()` raises an error. The `bit` library and FFI data types (`ffi.new`, `ffi.cast`) are available; `ffi.C` symbol lookup isn't. |
 | Filesystem | The game is read from the package (`/app0`). Saves go to `/data/love/<identity>`. |

@@ -12,6 +12,8 @@
 #   LOVE_PS4_VERSION   XX.YY                               (default: 01.00)
 #   LOVE_PS4_ICON      512x512 PNG                          (default: LÖVE logo)
 #   LOVE_PS4_CONTENT_LABEL  16-char A-Z/0-9 part of the content ID (default: from the title)
+#   LOVE_PS4_MODULES_DIR    folder whose *.sprx get bundled (default: platform/ps4/modules;
+#                           point it at an empty folder for packages you redistribute)
 #   LOVE_PS4_OUT       where to write the .pkg              (default: <build-dir>)
 #
 # Files in platform/ps4/modules/*.sprx (not in git, see README) are bundled into sce_module/,
@@ -66,7 +68,7 @@ cp "$OPENORBIS/samples/piglet/sce_sys/about/right.sprx" "$STAGE/sce_sys/about/"
 cp "$OPENORBIS/samples/piglet/sce_module/"*.prx "$STAGE/sce_module/"
 
 shopt -s nullglob
-modules=("$HERE"/modules/*.sprx)
+modules=("${LOVE_PS4_MODULES_DIR:-$HERE/modules}"/*.sprx)
 shopt -u nullglob
 for m in "${modules[@]}"; do
 	echo "bundling module $(basename "$m")"
