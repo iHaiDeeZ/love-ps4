@@ -1,35 +1,14 @@
-# LÖVE for PS4
+# LÖVE for PS4: developer documentation
 
-PS4 port by **ShiroKlein**.
+How the PS4 port works, how to build it, and how to package games. If you just want to install and
+play, see the [main readme](../../readme.md).
 
-A port of [LÖVE](https://love2d.org) 11.4 to PS4 homebrew, built with the open-source
+PS4 port by **ShiroKlein**, built with the open-source
 [OpenOrbis](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain) toolchain (via
 [PacBrew](https://github.com/PacBrew/pacbrew-packages)). No Sony SDK is involved.
 
-It runs unmodified LÖVE 11.x games, with the platform differences listed below.
-
-> **Status:** runs on a retail PS4 with GoldHEN (tested with the LÖVE no-game screen, a test game
-> and Mari0).
-
-Requirements for running: a PS4 with a homebrew-enabled firmware and GoldHEN (or similar)
-to install fake-signed packages.
-
-## Installing a release
-
-Each [release](https://github.com/iHaiDeeZ/love-ps4/releases) has:
-
-- `IV0000-LOVE00000_00-LOVE000000000000.pkg`: the LÖVE runtime. It runs `/data/love/game.love`
-  (or `/data/love/game/main.lua`) if present, otherwise it shows the no-game screen.
-- `IV0000-LOVE00001_00-LOVETEST00000000.pkg`: the PS4 test app (`platform/ps4/test`). It checks
-  rendering and shows the live state of every connected controller. Hold Options to quit.
-- `ps4-test.love`: the same test app as a game file for the runtime.
-
-The packages don't contain the Sony shader compiler modules (see below). Copy
-`libScePigletv2VSH.sprx` and `libSceShaccVSH.sprx` to **`/data/love/modules/`** on the console
-(for example with GoldHEN's FTP server) before starting them.
-
-To run your own game, copy it to `/data/love/game.love` and start LÖVE. To make a standalone
-package for it, see [Packaging a game](#packaging-a-game).
+Tested on a retail PS4 with GoldHEN, with the LÖVE no-game screen, the test app in `test/`, and
+Mari0.
 
 ## What works / what's different on PS4
 

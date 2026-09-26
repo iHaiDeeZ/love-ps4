@@ -1,123 +1,82 @@
-LÖVE for PS4
-============
+# LÖVE for PS4
 
-**This is an unofficial port of LÖVE 11.4 to PS4 homebrew** (OpenOrbis toolchain, no Sony SDK), by **ShiroKlein**.
-It is not affiliated with or supported by the LÖVE Development Team.
-Build instructions, platform differences and requirements are in [platform/ps4/README.md](platform/ps4/README.md).
-The upstream 11.4 source is imported unmodified in the first commit (tag `upstream-11.4`), so `git diff upstream-11.4` shows every PS4 change.
+Play [LÖVE](https://love2d.org) games on a PlayStation 4.
 
-The original LÖVE readme follows.
+LÖVE is a free framework for making 2D games in Lua. This project brings LÖVE 11.4 to PS4 homebrew,
+so games made with it can run on your console with a DualShock 4.
 
----
+Ported to PS4 by **ShiroKlein**. This is an unofficial port and isn't affiliated with the LÖVE team.
 
-LÖVE is an *awesome* framework you can use to make 2D games in Lua. It's free, open-source, and works on Windows, macOS, Linux, Android, and iOS.
+## What you need
 
-[![Build Status: Windows](https://ci.appveyor.com/api/projects/status/chc0hdr08wv1d5c7?svg=true)](https://ci.appveyor.com/project/AlexSzpakowski/love)
-[![Build Status: Github CI](https://github.com/love2d/love/workflows/continuous-integration/badge.svg)](https://github.com/love2d/love/actions?query=workflow%3Acontinuous-integration)
+- A PS4 with homebrew enabled (GoldHEN or similar) so you can install `.pkg` files.
+- Two system files, `libScePigletv2VSH.sprx` and `libSceShaccVSH.sprx`, from the 4.74 devkit
+  firmware. LÖVE needs them to draw anything. They belong to Sony, so they can't be included here;
+  they're the same files RetroArch for PS4 uses.
+- A way to copy files to the console, for example GoldHEN's FTP server.
 
-Documentation
--------------
+## Installing
 
-We use our [wiki][wiki] for documentation.
-If you need further help, feel free to ask on our [forums][forums], our [Discord server][discord], or our IRC channel [#love on OFTC][irc].
+1. On the console, create the folder `/data/love/modules/` and copy both `.sprx` files into it.
+2. Download the latest `.pkg` from the [Releases](https://github.com/iHaiDeeZ/love-ps4/releases) page:
+   - **LÖVE** is the player for your games.
+   - **LÖVE PS4 Test** is a small test app. Use it to check that everything works.
+3. Install the packages with GoldHEN's Package Installer.
+4. Start **LÖVE PS4 Test**. You should see three green "OK" lines, a moving square, and your
+   controller's sticks and buttons updating live. Hold **Options** for two seconds to quit.
 
-Repository
-----------
+## Playing a game
 
-We use the 'main' branch for patch development of the current major release, and therefore it should not be considered stable.
-There may also be a branch for the next major version in development, which is named after that version.
+LÖVE games come as `.love` files.
 
-We tag all our releases (since we started using mercurial and git), and have binary downloads available for them.
+1. Rename the game to `game.love`.
+2. Copy it to `/data/love/game.love` on the console.
+3. Start **LÖVE**.
 
-Experimental changes are developed in a separate [love-experiments][love-experiments] repository.
+Without a game, LÖVE shows its "no game" screen with a floating balloon.
 
-Builds
-------
+Games that were made for PC usually need small changes to work well with a controller and a TV. If
+you make games, see [Packaging your own game](#for-game-makers) below.
 
-Files for releases are in the [releases][releases] section on GitHub. [The site][site] has links to files and additional platform content for the latest release.
+## Controllers
 
-There are also unstable/nightly builds:
+- Up to 4 DualShock 4 controllers are supported.
+- Each controller has to be signed in to a user or a guest (the PS4 asks when you turn a controller
+  on). Sign them all in **before** starting the game.
+- The PS and Share buttons are used by the system, not the game.
 
-- Builds for some platforms are automatically created after each commit and are available through GitHub's CI interfaces.
-- For ubuntu linux they are in [ppa:bartbes/love-unstable][unstableppa]
-- For arch linux there's [love-git][aur] in the AUR.
+## Saves and logs
 
-Contributing
-------------
+- Game saves are stored in `/data/love/<game name>/`.
+- If a game misbehaves, the log is in `/data/love/log.txt`. It's the first thing to check, and the
+  file to include when reporting a problem.
 
-The best places to contribute are through the issue tracker and the official Discord server or IRC channel.
+## Troubleshooting
 
-For code contributions, pull requests and patches are welcome. Be sure to read the [source code style guide][codestyle].
-Changes and new features typically get discussed in the issue tracker or on Discord or the forums before a pull request is made.
+| Problem | What to try |
+|---|---|
+| The app goes straight back to the home screen | Check that both `.sprx` files are in `/data/love/modules/` with exactly those names. |
+| Blue screen with an error message | The game hit an error; the message says where. Press **Options** to quit. |
+| A controller doesn't respond | Make sure it's signed in to a user or guest, then restart the game. |
+| Anything else | Look at `/data/love/log.txt`. |
 
-Compilation
------------
+## For game makers
 
-### Windows
-Follow the instructions at the [megasource][megasource] repository page.
+Your game runs mostly unchanged, with a few PS4 differences:
 
-### *nix
-Run `platform/unix/automagic` from the repository root, then run ./configure and make.
+- The screen is always 1920×1080. Scale your game to `love.graphics.getDimensions()`.
+- Use the gamepad functions (`love.gamepadpressed`, `Joystick:isGamepadDown`). There's no keyboard,
+  mouse or touch.
+- `love.system.getOS()` returns `"PS4"`, so your game can detect the console.
 
-	$ platform/unix/automagic
-	$ ./configure
-	$ make
+To turn your game into its own installable `.pkg` with its own title and icon, see the
+[developer documentation](platform/ps4/README.md). It also covers building LÖVE for PS4 from source.
 
-When using a source release, automagic has already been run, and the first step can be skipped.
+## Credits and license
 
-### macOS
-Download or clone [this repository][dependencies-apple] and copy, move, or symlink the `macOS/Frameworks` subfolder into love's `platform/xcode/macosx` folder.
-
-Then use the Xcode project found at `platform/xcode/love.xcodeproj` to build the `love-macosx` target.
-
-### iOS
-Building for iOS requires macOS and Xcode.
-
-#### LÖVE 11.4 and newer
-Download the `love-apple-dependencies` zip file corresponding to the LÖVE version being used from the [Releases page][dependencies-ios],
-unzip it, and place the `iOS/libraries` subfolder into love's `platform/xcode/ios` folder.
-
-Or, download or clone [this repository][dependencies-apple] and copy, move, or symlink the `iOS/libraries` subfolder into love's `platform/xcode/ios` folder.
-
-Then use the Xcode project found at `platform/xcode/love.xcodeproj` to build the `love-ios` target.
-
-See `readme-iOS.rtf` for more information.
-
-#### LÖVE 11.3 and older
-Download the `ios-libraries` zip file corresponding to the LÖVE version being used from the [Releases page][dependencies-ios],
-unzip it, and place the `include` and `libraries` subfolders into love's `platform/xcode/ios` folder.
-
-Then use the Xcode project found at `platform/xcode/love.xcodeproj` to build the `love-ios` target.
-
-See `readme-iOS.rtf` for more information.
-
-### Android
-Visit the [Android build repository][android-repository] for build instructions.
-
-Dependencies
-------------
-
-- SDL2
-- OpenGL 2.1+ / OpenGL ES 2+
-- OpenAL
-- Lua / LuaJIT / LLVM-lua
-- FreeType
-- ModPlug
-- mpg123
-- Vorbisfile
-- Theora
-
-[site]: https://love2d.org
-[wiki]: https://love2d.org/wiki
-[forums]: https://love2d.org/forums
-[discord]: https://discord.gg/rhUets9
-[irc]: irc://irc.oftc.net/love
-[dependencies-apple]: https://github.com/love2d/love-apple-dependencies
-[dependencies-ios]: https://github.com/love2d/love/releases
-[megasource]: https://github.com/love2d/megasource
-[unstableppa]: https://launchpad.net/~bartbes/+archive/love-unstable
-[aur]: https://aur.archlinux.org/packages/love-git
-[love-experiments]: https://github.com/slime73/love-experiments
-[codestyle]: https://love2d.org/wiki/Code_Style
-[android-repository]: https://github.com/love2d/love-android
-[releases]: https://github.com/love2d/love/releases
+- PS4 port: **ShiroKlein**.
+- [LÖVE](https://love2d.org) by the LÖVE Development Team, under the zlib license (see
+  [license.txt](license.txt)). This repository is a modified version of LÖVE 11.4. The unmodified
+  original is the first commit, tagged `upstream-11.4`.
+- Built with the open-source [OpenOrbis](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain)
+  toolchain and [PacBrew](https://github.com/PacBrew/pacbrew-packages) packages. No Sony SDK was used.
