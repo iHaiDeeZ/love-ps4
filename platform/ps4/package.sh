@@ -11,6 +11,7 @@
 #   LOVE_PS4_TITLE_ID  4 letters + 5 digits, unique per app (default: LOVE00000)
 #   LOVE_PS4_VERSION   XX.YY                               (default: 01.00)
 #   LOVE_PS4_ICON      512x512 PNG                          (default: LÖVE logo)
+#   LOVE_PS4_CONTENT_LABEL  16-char A-Z/0-9 part of the content ID (default: from the title)
 #   LOVE_PS4_OUT       where to write the .pkg              (default: <build-dir>)
 #
 # Files in platform/ps4/modules/*.sprx (not in git, see README) are bundled into sce_module/,
@@ -50,7 +51,7 @@ if ! [[ "$VERSION" =~ ^[0-9]{2}\.[0-9]{2}$ ]]; then
 fi
 
 # Content ID: IV0000-<TITLE_ID>_00-<16 chars A-Z0-9>
-label="$(printf '%s' "$TITLE" | sed 's/[Öö]/O/g' | tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9')"
+label="$(printf '%s' "${LOVE_PS4_CONTENT_LABEL:-$TITLE}" | sed 's/[Öö]/O/g' | tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9')"
 label="$(printf '%-16s' "${label:0:16}" | tr ' ' '0')"
 CONTENT_ID="IV0000-${TITLE_ID}_00-${label}"
 

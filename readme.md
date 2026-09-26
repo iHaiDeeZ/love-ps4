@@ -1,7 +1,7 @@
 LÖVE for PS4
 ============
 
-**This is an unofficial port of LÖVE 11.4 to PS4 homebrew** (OpenOrbis toolchain, no Sony SDK).
+**This is an unofficial port of LÖVE 11.4 to PS4 homebrew** (OpenOrbis toolchain, no Sony SDK), by **ShiroKlein**.
 It is not affiliated with or supported by the LÖVE Development Team.
 Build instructions, platform differences and requirements are in [platform/ps4/README.md](platform/ps4/README.md).
 The upstream 11.4 source is imported unmodified in the first commit (tag `upstream-11.4`), so `git diff upstream-11.4` shows every PS4 change.

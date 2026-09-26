@@ -1,5 +1,7 @@
 # LÖVE for PS4
 
+PS4 port by **ShiroKlein**.
+
 A port of [LÖVE](https://love2d.org) 11.4 to PS4 homebrew, built with the open-source
 [OpenOrbis](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain) toolchain (via
 [PacBrew](https://github.com/PacBrew/pacbrew-packages)). No Sony SDK is involved.
