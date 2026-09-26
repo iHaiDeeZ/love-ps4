@@ -168,6 +168,11 @@ bool Window::checkGLVersion(const ContextAttribs &attribs, std::string &outversi
 	// We don't have OpenGL headers or an automatic OpenGL function loader in
 	// this module, so we have to get the glGetString function pointer ourselves.
 	glGetStringPtr glGetStringFunc = (glGetStringPtr) SDL_GL_GetProcAddress("glGetString");
+#ifdef LOVE_PS4
+	// eglGetProcAddress isn't required to return core functions.
+	if (!glGetStringFunc)
+		glGetStringFunc = (glGetStringPtr) love::ps4::getGLProcAddress("glGetString");
+#endif
 	if (!glGetStringFunc)
 		return false;
 
@@ -193,6 +198,8 @@ bool Window::checkGLVersion(const ContextAttribs &attribs, std::string &outversi
 	const char *format = "%d.%d";
 	if (attribs.gles)
 		format = "OpenGL ES %d.%d";
+
+	PS4_TRACE("window: GL version: %s", outversion.c_str());
 
 	if (sscanf(glversion, format, &glmajor, &glminor) != 2)
 		return false;
@@ -318,13 +325,17 @@ bool Window::createWindowAndContext(int x, int y, int w, int h, Uint32 windowfla
 		if (!window)
 		{
 			windowerror = std::string(SDL_GetError());
+			PS4_TRACE("window: SDL_CreateWindow failed: %s", windowerror.c_str());
 			return false;
 		}
 
 		context = SDL_GL_CreateContext(window);
 
 		if (!context)
+		{
 			contexterror = std::string(SDL_GetError());
+			PS4_TRACE("window: SDL_GL_CreateContext failed: %s", contexterror.c_str());
+		}
 
 		// Make sure the context's version is at least what we requested.
 		if (context && !checkGLVersion(attribs, glversion))

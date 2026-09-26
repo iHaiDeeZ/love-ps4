@@ -56,6 +56,25 @@ if(LOVE_MPG123)
 	set(LOVE_LINK_LIBRARIES ${LOVE_LINK_LIBRARIES} ${PS4_PORTLIBS}/lib/libmpg123.a)
 endif()
 
+# The toolchain's linker script only collects plain .init_array, so prioritized constructors
+# (.init_array.NNN - e.g. libc++'s iostream setup that creates std::cout) end up in an orphan
+# section the loader never runs. Link with a copy that includes them, in priority order.
+set(PS4_LINK_SCRIPT_IN ${OPENORBIS}/link.x)
+set(PS4_LINK_SCRIPT ${CMAKE_BINARY_DIR}/ps4-link.x)
+file(READ ${PS4_LINK_SCRIPT_IN} PS4_LINK_SCRIPT_TEXT)
+string(FIND "${PS4_LINK_SCRIPT_TEXT}" "*(.init_array);" PS4_INIT_ARRAY_POS)
+if(PS4_INIT_ARRAY_POS EQUAL -1)
+	message(FATAL_ERROR "Unexpected ${PS4_LINK_SCRIPT_IN}: no '*(.init_array);' rule to patch")
+endif()
+string(REPLACE "*(.init_array);"
+	"KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*))); KEEP(*(.init_array));"
+	PS4_LINK_SCRIPT_TEXT "${PS4_LINK_SCRIPT_TEXT}")
+file(WRITE ${PS4_LINK_SCRIPT} "${PS4_LINK_SCRIPT_TEXT}")
+string(REPLACE "${PS4_LINK_SCRIPT_IN}" "${PS4_LINK_SCRIPT}" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+if(NOT CMAKE_EXE_LINKER_FLAGS MATCHES "ps4-link.x")
+	string(APPEND CMAKE_EXE_LINKER_FLAGS " --script ${PS4_LINK_SCRIPT}")
+endif()
+
 # The libc heap can't initialize on retail consoles; route the malloc family to our own
 # (src/common/ps4_heap.cpp). ps4.cmake links with ld.lld directly, so these are raw linker flags.
 foreach(fn malloc free calloc realloc memalign __memalign)
