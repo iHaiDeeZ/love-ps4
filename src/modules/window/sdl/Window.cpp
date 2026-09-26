@@ -395,6 +395,20 @@ bool Window::createWindowAndContext(int x, int y, int w, int h, Uint32 windowfla
 			}
 		}
 
+#ifdef LOVE_PS4
+		if (!window)
+		{
+			// The framebuffer format RetroArch uses with Piglet: 16-bit depth, no stencil.
+			PS4_TRACE("window: retrying with a 16-bit depth, no stencil framebuffer");
+			setGLFramebufferAttributes(0, false, false, 16);
+			if (create(attribs))
+			{
+				curMSAA = 0;
+				curSRGB = false;
+			}
+		}
+#endif
+
 		if (window && context)
 		{
 			// Store the successful context attributes so we can re-use them in

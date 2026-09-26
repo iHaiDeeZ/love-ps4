@@ -1,6 +1,6 @@
 diff -ruN a/src/joystick/ps4/SDL_sysjoystick.c b/src/joystick/ps4/SDL_sysjoystick.c
---- a/src/joystick/ps4/SDL_sysjoystick.c	2026-09-26 08:09:05.321480585 +0300
-+++ b/src/joystick/ps4/SDL_sysjoystick.c	2026-09-26 08:09:05.345558170 +0300
+--- a/src/joystick/ps4/SDL_sysjoystick.c	2026-09-26 16:38:18.415920735 +0300
++++ b/src/joystick/ps4/SDL_sysjoystick.c	2026-09-26 16:38:18.441229184 +0300
 @@ -56,9 +56,9 @@
          ORBIS_PAD_BUTTON_CIRCLE,    // b:b1
          ORBIS_PAD_BUTTON_SQUARE,    // x:b2
@@ -50,3 +50,33 @@ diff -ruN a/src/joystick/ps4/SDL_sysjoystick.c b/src/joystick/ps4/SDL_sysjoystic
      out->leftstick.kind = EMappingKind_Button;
      out->leftstick.target = 7;
      out->rightstick.kind = EMappingKind_Button;
+diff -ruN a/src/video/ps4/SDL_ps4piglet.c b/src/video/ps4/SDL_ps4piglet.c
+--- a/src/video/ps4/SDL_ps4piglet.c	2026-09-26 16:38:18.427867544 +0300
++++ b/src/video/ps4/SDL_ps4piglet.c	2026-09-26 16:38:18.474002652 +0300
+@@ -177,14 +177,21 @@
+     }
+ 
+     SDL_memset(&ps4_pgl_config, 0, sizeof(ps4_pgl_config));
++    /* Same configuration as RetroArch's PS4 port (gfx/drivers_context/orbis_ctx.c), which works
++       with the devkit Piglet + shader compiler. With flags = 0 and 256 MiB pools, eglGetDisplay
++       returned EGL_NO_DISPLAY on retail hardware. Graphics memory comes from flexible memory. */
+     ps4_pgl_config.size = sizeof(ps4_pgl_config);
+-    ps4_pgl_config.flags = 0;
+-    ps4_pgl_config.systemSharedMemorySize = 256 * 1024 * 1024;
+-    ps4_pgl_config.videoSharedMemorySize = 256 * 1024 * 1024;
+-    ps4_pgl_config.drawCommandBufferSize = 1 * 1024 * 1024;
+-    ps4_pgl_config.lcueResourceBufferSize = 1 * 1024 * 1024;
++    ps4_pgl_config.flags = ORBIS_PGL_FLAGS_USE_COMPOSITE_EXT | ORBIS_PGL_FLAGS_USE_FLEXIBLE_MEMORY | 0x60;
++    ps4_pgl_config.processOrder = 1;
++    ps4_pgl_config.systemSharedMemorySize = 0x1000000;
++    ps4_pgl_config.videoSharedMemorySize = 0x3000000;
++    ps4_pgl_config.maxMappedFlexibleMemory = 0xFFFFFFFF;
++    ps4_pgl_config.drawCommandBufferSize = 0x100000;
++    ps4_pgl_config.lcueResourceBufferSize = 0x1000000;
+     ps4_pgl_config.dbgPosCmd_0x40 = 1920;
+     ps4_pgl_config.dbgPosCmd_0x44 = 1080;
++    ps4_pgl_config.dbgPosCmd_0x48 = 0;
++    ps4_pgl_config.dbgPosCmd_0x4C = 0;
+     ps4_pgl_config.unk_0x5C = 2;
+ 
+     if (!scePigletSetConfigurationVSH(&ps4_pgl_config)) {
