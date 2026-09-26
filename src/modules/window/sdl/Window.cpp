@@ -549,6 +549,9 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 	if (!createWindowAndContext(x, y, width, height, sdlflags, f.msaa, f.stencil, f.depth))
 	{
 		PS4_TRACE("window: failed: %s", SDL_GetError());
+#ifdef LOVE_PS4
+		love::ps4::logGraphicsDiagnostics();
+#endif
 		return false;
 	}
 	PS4_TRACE("window: created");

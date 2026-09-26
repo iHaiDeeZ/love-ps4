@@ -25,7 +25,10 @@
 #ifdef LOVE_PS4
 
 #include <GLES2/gl2.h>
+#include <EGL/egl.h>
 #include <string.h>
+
+#include "ps4.h"
 
 namespace love
 {
@@ -197,6 +200,15 @@ void *getGLProcAddress(const char *name)
 			return e.proc;
 	}
 	return nullptr;
+}
+
+void logGraphicsDiagnostics()
+{
+	EGLint error = eglGetError();
+	EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+	EGLint retryError = eglGetError();
+	log("EGL: last error 0x%x; eglGetDisplay retry -> %p (error 0x%x)", error, display, retryError);
+	logMemory();
 }
 
 } // ps4

@@ -57,6 +57,12 @@ std::string getAppdataDirectory();
 // Fallback for GL entry points that SDL_GL_GetProcAddress (eglGetProcAddress) doesn't return.
 void *getGLProcAddress(const char *name);
 
+// Logs EGL error state and free memory; called when the window/GL context can't be created.
+void logGraphicsDiagnostics();
+
+// Logs free flexible and direct memory.
+void logMemory();
+
 // printf-style logging to klog and /data/love/log.txt.
 void log(const char *fmt, ...);
 

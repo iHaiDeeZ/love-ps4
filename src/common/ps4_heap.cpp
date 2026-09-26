@@ -46,6 +46,8 @@ int32_t sceKernelDebugOutText(int32_t channel, const char *fmt, ...);
 int32_t sceKernelAvailableFlexibleMemorySize(size_t *size);
 int32_t sceKernelReserveVirtualRange(void **addr, size_t len, int32_t flags, size_t alignment);
 int32_t sceKernelMapNamedFlexibleMemory(void **addr, size_t len, int32_t prot, int32_t flags, const char *name);
+size_t sceKernelGetDirectMemorySize(void);
+int32_t sceKernelAvailableDirectMemorySize(int64_t start, int64_t end, size_t alignment, int64_t *startOut, size_t *sizeOut);
 
 void *sceLibcMspaceCreate(const char *name, void *base, size_t capacity, unsigned int flags);
 void *sceLibcMspaceMalloc(void *msp, size_t size);
@@ -70,8 +72,10 @@ void heapLog(const char *fmt, Args... args)
 }
 const size_t PAGE = 16 * 1024;
 
-// Flexible memory left for the system libraries (Piglet, audio, pads...) after the heap is made.
-const size_t RESERVE_FOR_SYSTEM = 64 * MB;
+// Flexible memory left for the system libraries after the heap is made. Piglet (OpenGL ES) is
+// configured by SDL with 256 MiB of shared system memory; with only 64 MiB left, eglGetDisplay
+// failed on hardware.
+const size_t RESERVE_FOR_SYSTEM = 256 * MB;
 
 void *heap = nullptr;
 
@@ -125,6 +129,28 @@ inline void *getHeap()
 }
 
 } // anonymous namespace
+
+namespace love
+{
+namespace ps4
+{
+
+void log(const char *fmt, ...);
+
+void logMemory()
+{
+	size_t flexible = 0;
+	sceKernelAvailableFlexibleMemorySize(&flexible);
+	int64_t directStart = 0;
+	size_t directFree = 0;
+	size_t directTotal = sceKernelGetDirectMemorySize();
+	sceKernelAvailableDirectMemorySize(0, (int64_t) directTotal, 0, &directStart, &directFree);
+	log("memory: flexible available %zu MiB; direct %zu MiB total, largest free block %zu MiB",
+		flexible / MB, directTotal / MB, directFree / MB);
+}
+
+} // ps4
+} // love
 
 extern "C"
 {
