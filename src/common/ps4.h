@@ -60,6 +60,9 @@ void *getGLProcAddress(const char *name);
 // Logs EGL error state and free memory; called when the window/GL context can't be created.
 void logGraphicsDiagnostics();
 
+// Logs the names of all loaded modules.
+void logModules();
+
 // Logs free flexible and direct memory.
 void logMemory();
 

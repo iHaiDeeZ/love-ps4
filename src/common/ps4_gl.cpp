@@ -209,6 +209,7 @@ void logGraphicsDiagnostics()
 	EGLint retryError = eglGetError();
 	log("EGL: last error 0x%x; eglGetDisplay retry -> %p (error 0x%x)", error, display, retryError);
 	logMemory();
+	logModules();
 }
 
 } // ps4

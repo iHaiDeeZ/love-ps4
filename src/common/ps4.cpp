@@ -133,6 +133,7 @@ static void loadSystemModules()
 		{"SystemService", true, ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE}, // exit, before SDL starts
 		{"Random", false, ORBIS_SYSMODULE_RANDOM},                        // LuaJIT seeds its PRNG
 		{"Net", true, ORBIS_SYSMODULE_INTERNAL_NET},                      // DNS for luasocket/enet
+		{"VideoOut", true, ORBIS_SYSMODULE_INTERNAL_VIDEO_OUT},           // Piglet scans out through it
 	};
 
 	for (const Module &m : modules)
@@ -168,6 +169,8 @@ static void sdlLogOutput(void * /*userdata*/, int /*category*/, SDL_LogPriority 
 	log("SDL: %s", message);
 }
 
+std::string findGame();
+
 static bool fileExists(const std::string &path)
 {
 	struct stat st;
@@ -179,6 +182,14 @@ static bool fileExists(const std::string &path)
 // These are Sony system files and can't be distributed with love; see platform/ps4/README.md.
 static void setupPigletModules()
 {
+	// Diagnostic switch: use the console's own Piglet (no runtime shader compiler) for the
+	// bare runtime when this file exists. Shaders won't compile, but it shows whether EGL starts.
+	if (fileExists("/data/love/use_system_piglet") && findGame().empty())
+	{
+		log("use_system_piglet: not loading the shader compiler modules");
+		return;
+	}
+
 	const char *dirs[] = {
 		"/app0/sce_module",               // bundled into the pkg at build time
 		"/data/love/modules",             // user-provided, shared by all love games
@@ -207,6 +218,25 @@ static void onExit()
 	sceSystemServiceLoadExec("exit", nullptr);
 	for (;;)
 		sceKernelUsleep(100000);
+}
+
+void logModules()
+{
+	OrbisKernelModule handles[256];
+	size_t count = 0;
+	if (sceKernelGetModuleList(handles, 256, &count) != 0)
+		return;
+
+	std::string names;
+	for (size_t i = 0; i < count; i++)
+	{
+		OrbisKernelModuleInfo info;
+		memset(&info, 0, sizeof(info));
+		info.size = sizeof(info);
+		if (sceKernelGetModuleInfo(handles[i], &info) == 0)
+			names += std::string(i > 0 ? ", " : "") + info.name;
+	}
+	log("loaded modules (%zu): %s", count, names.c_str());
 }
 
 std::string findGame()
