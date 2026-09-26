@@ -1025,10 +1025,24 @@ love::image::ImageData *Window::getIcon()
 	return icon.get();
 }
 
+#ifdef LOVE_PS4
+// With a swap interval of 1, Piglet's eglSwapBuffers shows the frame and then never returns
+// (seen on hardware). RetroArch always uses 0 there too. So vsync is emulated: the swap
+// interval stays 0 and swapBuffers paces frames to the display's 60 Hz.
+static int ps4RequestedVSync = 1;
+static Uint64 ps4LastSwap = 0;
+#endif
+
 void Window::setVSync(int vsync)
 {
 	if (context == nullptr)
 		return;
+
+#ifdef LOVE_PS4
+	ps4RequestedVSync = vsync;
+	SDL_GL_SetSwapInterval(0);
+	return;
+#endif
 
 	SDL_GL_SetSwapInterval(vsync);
 
@@ -1040,6 +1054,9 @@ void Window::setVSync(int vsync)
 
 int Window::getVSync() const
 {
+#ifdef LOVE_PS4
+	return context != nullptr ? ps4RequestedVSync : 0;
+#endif
 	return context != nullptr ? SDL_GL_GetSwapInterval() : 0;
 }
 
@@ -1093,6 +1110,29 @@ bool Window::isMinimized() const
 void Window::swapBuffers()
 {
 	SDL_GL_SwapWindow(window);
+
+#ifdef LOVE_PS4
+	if (ps4RequestedVSync != 0)
+	{
+		// Software vsync: at most one frame per 1/60 s (per 2/60 s for vsync = 2, etc).
+		const Uint64 freq = SDL_GetPerformanceFrequency();
+		const int interval = ps4RequestedVSync > 0 ? ps4RequestedVSync : 1;
+		const Uint64 frame = freq * interval / 60;
+		Uint64 now = SDL_GetPerformanceCounter();
+		if (ps4LastSwap != 0 && now - ps4LastSwap < frame)
+		{
+			Uint64 remaining = frame - (now - ps4LastSwap);
+			Uint32 ms = (Uint32) (remaining * 1000 / freq);
+			if (ms > 1)
+				SDL_Delay(ms - 1);
+			while (SDL_GetPerformanceCounter() - ps4LastSwap < frame)
+				;
+			now = SDL_GetPerformanceCounter();
+		}
+		// Don't try to catch up after a long frame, just start pacing from here.
+		ps4LastSwap = (ps4LastSwap != 0 && now - ps4LastSwap < 2 * frame) ? ps4LastSwap + frame : now;
+	}
+#endif
 }
 
 bool Window::hasFocus() const
