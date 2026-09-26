@@ -57,6 +57,9 @@ std::string getAppdataDirectory();
 // Fallback for GL entry points that SDL_GL_GetProcAddress (eglGetProcAddress) doesn't return.
 void *getGLProcAddress(const char *name);
 
+// printf-style logging to klog and /data/love/log.txt.
+void log(const char *fmt, ...);
+
 // Closes the app and returns to the PS4 home screen. Never returns.
 [[noreturn]] void exit(int status);
 

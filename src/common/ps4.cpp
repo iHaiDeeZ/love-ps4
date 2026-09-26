@@ -29,7 +29,9 @@
 
 #include <sys/stat.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
@@ -90,12 +92,48 @@ namespace love
 namespace ps4
 {
 
-static void log(const char *fmt, const char *arg = "")
+static FILE *logFile = nullptr;
+
+void log(const char *fmt, ...)
 {
-	char buffer[512];
-	snprintf(buffer, sizeof(buffer), fmt, arg);
+	char buffer[1024];
+	va_list args;
+	va_start(args, fmt);
+	vsnprintf(buffer, sizeof(buffer), fmt, args);
+	va_end(args);
+
+	// Drop trailing newlines, SDL adds its own.
+	size_t len = strlen(buffer);
+	while (len > 0 && (buffer[len - 1] == '\n' || buffer[len - 1] == '\r'))
+		buffer[--len] = '\0';
+
 	// klog (visible with GoldHEN's klog redirect: nc <ps4-ip> 3232).
 	sceKernelDebugOutText(0, "[love] %s\n", buffer);
+	if (logFile != nullptr)
+		fprintf(logFile, "[love] %s\n", buffer);
+}
+
+// Everything also goes to /data/love/log.txt (unbuffered, so it survives a crash), including
+// stdout/stderr (Lua's print) and SDL's own log, which covers the Piglet/shader compiler setup.
+static void openLog()
+{
+	mkdir("/data/love", 0777);
+	logFile = fopen("/data/love/log.txt", "w");
+	if (logFile == nullptr)
+		return;
+
+	setvbuf(logFile, nullptr, _IONBF, 0);
+	fflush(stdout);
+	fflush(stderr);
+	dup2(fileno(logFile), STDOUT_FILENO);
+	dup2(fileno(logFile), STDERR_FILENO);
+	setvbuf(stdout, nullptr, _IONBF, 0);
+	setvbuf(stderr, nullptr, _IONBF, 0);
+}
+
+static void sdlLogOutput(void * /*userdata*/, int /*category*/, SDL_LogPriority /*priority*/, const char *message)
+{
+	log("SDL: %s", message);
 }
 
 static bool fileExists(const std::string &path)
@@ -126,7 +164,7 @@ static void setupPigletModules()
 		}
 	}
 
-	log("libSceShaccVSH.sprx / libScePigletv2VSH.sprx not found: shaders can't be compiled, graphics will fail to start. %s",
+	log("libSceShaccVSH.sprx / libScePigletv2VSH.sprx not found: shaders can't be compiled, graphics will fail to start. "
 	    "See platform/ps4/README.md.");
 }
 
@@ -161,6 +199,8 @@ std::string findGame()
 
 void init(int &argc, char **&argv)
 {
+	openLog();
+	SDL_LogSetOutputFunction(sdlLogOutput, nullptr);
 	log("LOVE for PS4 starting");
 
 	atexit(onExit);
@@ -205,7 +245,7 @@ std::string getAppdataDirectory()
 
 void exit(int status)
 {
-	log(status == 0 ? "quit" : "quit with error%s", "");
+	log("quit (status %d)", status);
 	onExit();
 }
 

@@ -23,6 +23,13 @@
 #include "graphics/Graphics.h"
 #include "Window.h"
 
+#ifdef LOVE_PS4
+#include "common/ps4.h"
+#define PS4_TRACE(...) love::ps4::log(__VA_ARGS__)
+#else
+#define PS4_TRACE(...)
+#endif
+
 #ifdef LOVE_ANDROID
 #include "common/android.h"
 #endif
@@ -527,8 +534,13 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 
 	close();
 
+	PS4_TRACE("window: creating %dx%d GL context", width, height);
 	if (!createWindowAndContext(x, y, width, height, sdlflags, f.msaa, f.stencil, f.depth))
+	{
+		PS4_TRACE("window: failed: %s", SDL_GetError());
 		return false;
+	}
+	PS4_TRACE("window: created");
 
 	// Make sure the window keeps any previously set icon.
 	setIcon(icon.get());
@@ -552,7 +564,9 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 	{
 		double scaledw, scaledh;
 		fromPixels((double) pixelWidth, (double) pixelHeight, scaledw, scaledh);
+		PS4_TRACE("graphics: setting up (compiles the default shaders)");
 		graphics->setMode((int) scaledw, (int) scaledh, pixelWidth, pixelHeight, f.stencil);
+		PS4_TRACE("graphics: ready");
 	}
 
 	// Set fullscreen when user requested it before.

@@ -161,6 +161,12 @@ bool OpenGL::initContext()
 
 	initOpenGLFunctions();
 
+#ifdef LOVE_PS4
+	love::ps4::log("GL: %s | %s | %s | GLSL %s", (const char *) glGetString(GL_VENDOR),
+		(const char *) glGetString(GL_RENDERER), (const char *) glGetString(GL_VERSION),
+		(const char *) glGetString(GL_SHADING_LANGUAGE_VERSION));
+#endif
+
 #if defined(LOVE_WINDOWS) || defined(LOVE_LINUX)
 	// See the comments in OpenGL.h.
 	if (getVendor() == VENDOR_AMD)

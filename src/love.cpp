@@ -271,6 +271,7 @@ int main(int argc, char **argv)
 
 #ifdef LOVE_PS4
 	love::ps4::init(argc, argv);
+	love::ps4::log("starting Lua");
 #endif
 
 	int retval = 0;
