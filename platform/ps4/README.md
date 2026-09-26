@@ -6,7 +6,8 @@ A port of [LÖVE](https://love2d.org) 11.4 to PS4 homebrew, built with the open-
 
 It runs unmodified LÖVE 11.x games, with the platform differences listed below.
 
-> **Status:** builds and packages. **Not yet tested on real hardware.**
+> **Status:** runs on a retail PS4 with GoldHEN (tested with the LÖVE no-game screen, a test game
+> and Mari0).
 
 Requirements for running: a PS4 with a homebrew-enabled firmware and GoldHEN (or similar)
 to install fake-signed packages.
