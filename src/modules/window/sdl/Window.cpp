@@ -488,6 +488,16 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 		f.resizable = false;
 		f.borderless = false;
 	}
+
+	// The window can't change, so keep the one we have. Destroying and recreating it (as games
+	// do when they call setMode again) left the next buffer swap blocked forever on hardware.
+	if (window != nullptr && context != nullptr)
+	{
+		PS4_TRACE("window: setMode keeps the existing %dx%d window", width, height);
+		setVSync(f.vsync);
+		updateSettings(f, false);
+		return true;
+	}
 #endif
 
 	Uint32 sdlflags = SDL_WINDOW_OPENGL;
