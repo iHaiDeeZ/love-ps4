@@ -26,6 +26,7 @@
 
 #include <orbis/libkernel.h>
 #include <orbis/SystemService.h>
+#include <orbis/Sysmodule.h>
 
 #include <sys/stat.h>
 #include <pthread.h>
@@ -107,10 +108,41 @@ void log(const char *fmt, ...)
 	while (len > 0 && (buffer[len - 1] == '\n' || buffer[len - 1] == '\r'))
 		buffer[--len] = '\0';
 
-	// klog (visible with GoldHEN's klog redirect: nc <ps4-ip> 3232).
-	sceKernelDebugOutText(0, "[love] %s\n", buffer);
+	// klog (visible with GoldHEN's klog redirect: nc <ps4-ip> 3232). It doesn't format
+	// arguments, so hand it the finished line.
+	char line[1100];
+	snprintf(line, sizeof(line), "[love] %s\n", buffer);
+	sceKernelDebugOutText(0, line);
 	if (logFile != nullptr)
-		fprintf(logFile, "[love] %s\n", buffer);
+		fputs(line, logFile);
+}
+
+// System libraries are only usable once their module is loaded; calling into one that isn't
+// kills the app with PRX_NOT_RESOLVED_FUNCTION. SDL loads the video, audio and pad ones itself
+// when it starts, the rest are loaded here.
+static void loadSystemModules()
+{
+	struct Module
+	{
+		const char *name;
+		bool internal;
+		uint32_t id;
+	};
+
+	const Module modules[] = {
+		{"SystemService", true, ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE}, // exit, before SDL starts
+		{"Random", false, ORBIS_SYSMODULE_RANDOM},                        // LuaJIT seeds its PRNG
+		{"Net", true, ORBIS_SYSMODULE_INTERNAL_NET},                      // DNS for luasocket/enet
+	};
+
+	for (const Module &m : modules)
+	{
+		int32_t ret = m.internal
+			? (int32_t) sceSysmoduleLoadModuleInternal((OrbisSysModuleInternal) m.id)
+			: sceSysmoduleLoadModule((OrbisSysModule) m.id);
+		if (ret != 0)
+			log("loading system module %s failed (0x%08x)", m.name, (unsigned) ret);
+	}
 }
 
 // Everything also goes to /data/love/log.txt (unbuffered, so it survives a crash), including
@@ -202,6 +234,7 @@ void init(int &argc, char **&argv)
 	openLog();
 	SDL_LogSetOutputFunction(sdlLogOutput, nullptr);
 	log("LOVE for PS4 starting");
+	loadSystemModules();
 
 	atexit(onExit);
 	setupPigletModules();

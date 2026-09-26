@@ -37,6 +37,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 // Declared by hand: the toolchain headers give these the wrong (or no) prototypes.
 extern "C"
@@ -58,6 +59,15 @@ namespace
 {
 
 const size_t MB = 1024 * 1024;
+
+// sceKernelDebugOutText doesn't format its arguments, so format here (snprintf doesn't allocate).
+template <typename... Args>
+void heapLog(const char *fmt, Args... args)
+{
+	char line[256];
+	snprintf(line, sizeof(line), fmt, args...);
+	sceKernelDebugOutText(0, line);
+}
 const size_t PAGE = 16 * 1024;
 
 // Flexible memory left for the system libraries (Piglet, audio, pads...) after the heap is made.
@@ -69,7 +79,7 @@ void *createHeap()
 {
 	size_t available = 0;
 	int32_t ret = sceKernelAvailableFlexibleMemorySize(&available);
-	sceKernelDebugOutText(0, "[love] heap: available flexible memory: %zu MiB (ret 0x%x)\n", available / MB, ret);
+	heapLog("[love] heap: available flexible memory: %zu MiB (ret 0x%x)\n", available / MB, ret);
 
 	size_t size = 1024 * MB;
 	if (ret == 0 && available > RESERVE_FOR_SYSTEM)
@@ -90,19 +100,19 @@ void *createHeap()
 		ret = sceKernelMapNamedFlexibleMemory(&base, size, 0x3, 0, "love heap");
 		if (ret != 0)
 		{
-			sceKernelDebugOutText(0, "[love] heap: mapping %zu MiB failed (0x%x)\n", size / MB, ret);
+			heapLog("[love] heap: mapping %zu MiB failed (0x%x)\n", size / MB, ret);
 			continue; // The leaked VA reservation doesn't matter in a 47-bit address space.
 		}
 
 		void *msp = sceLibcMspaceCreate("love heap", base, size, 0);
 		if (msp != nullptr)
 		{
-			sceKernelDebugOutText(0, "[love] heap: %zu MiB at %p\n", size / MB, base);
+			heapLog("[love] heap: %zu MiB at %p\n", size / MB, base);
 			return msp;
 		}
 	}
 
-	sceKernelDebugOutText(0, "[love] heap: could not create a heap, out of memory\n");
+	heapLog("[love] heap: could not create a heap, out of memory\n");
 	return nullptr;
 }
 
