@@ -273,7 +273,9 @@ function love.errhand(msg)
 		p = p .. "\nCopied to clipboard!"
 	end
 
-	if love.system then
+	if love._os == "PS4" then
+		p = p .. "\n\nPress Options to quit"
+	elseif love.system then
 		p = p .. "\n\nPress Ctrl+C or tap to copy this error"
 	end
 
@@ -284,6 +286,8 @@ function love.errhand(msg)
 			if e == "quit" then
 				return 1
 			elseif e == "keypressed" and a == "escape" then
+				return 1
+			elseif e == "gamepadpressed" and (b == "start" or b == "back") then
 				return 1
 			elseif e == "keypressed" and a == "c" and love.keyboard.isDown("lctrl", "rctrl") then
 				copyToClipboard()
