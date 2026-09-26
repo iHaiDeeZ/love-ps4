@@ -29,6 +29,10 @@
 #include "graphics/Graphics.h"
 #include "graphics/Buffer.h"
 
+#ifdef LOVE_PS4
+#include "common/ps4.h"
+#endif
+
 // C++
 #include <algorithm>
 #include <limits>
@@ -63,7 +67,15 @@ static void *LOVEGetProcAddress(const char *name)
 		return proc;
 #endif
 
+#ifdef LOVE_PS4
+	// eglGetProcAddress isn't required to return core functions.
+	void *proc = SDL_GL_GetProcAddress(name);
+	if (proc)
+		return proc;
+	return love::ps4::getGLProcAddress(name);
+#else
 	return SDL_GL_GetProcAddress(name);
+#endif
 }
 
 OpenGL::TempDebugGroup::TempDebugGroup(const char *name)

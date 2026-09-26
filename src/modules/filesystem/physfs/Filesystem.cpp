@@ -48,6 +48,10 @@
 
 #include <string>
 
+#ifdef LOVE_PS4
+#include "common/ps4.h"
+#endif
+
 #ifdef LOVE_ANDROID
 #include <SDL.h>
 #include "common/android.h"
@@ -511,6 +515,9 @@ std::string Filesystem::getUserDirectory()
 #ifdef LOVE_IOS
 	// PHYSFS_getUserDir doesn't give exactly the path we want on iOS.
 	static std::string userDir = normalize(love::ios::getHomeDirectory());
+#elif defined(LOVE_PS4)
+	// There is no home directory; PHYSFS_getUserDir would return null.
+	static std::string userDir = love::ps4::getAppdataDirectory();
 #else
 	static std::string userDir = normalize(PHYSFS_getUserDir());
 #endif
@@ -534,6 +541,8 @@ std::string Filesystem::getAppdataDirectory()
 		appdata = normalize(udir);
 #elif defined(LOVE_IOS)
 		appdata = normalize(love::ios::getAppdataDirectory());
+#elif defined(LOVE_PS4)
+		appdata = love::ps4::getAppdataDirectory();
 #elif defined(LOVE_LINUX)
 		char *xdgdatahome = getenv("XDG_DATA_HOME");
 		if (!xdgdatahome)

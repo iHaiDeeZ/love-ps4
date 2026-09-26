@@ -35,6 +35,8 @@
 #include "common/utf8.h"
 #elif defined(LOVE_LINUX)
 #include <unistd.h>
+#elif defined(LOVE_PS4)
+#include "common/ps4.h"
 #endif
 
 namespace love
@@ -115,6 +117,8 @@ std::string Filesystem::getExecutablePath() const
 
 	return std::string(buffer, len);
 
+#elif defined(LOVE_PS4)
+	return love::ps4::getExecutablePath();
 #else
 #error Missing implementation for Filesystem::getExecutablePath!
 #endif

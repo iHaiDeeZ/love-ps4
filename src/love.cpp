@@ -45,6 +45,10 @@ extern "C" {
 #include "common/ios.h"
 #endif
 
+#ifdef LOVE_PS4
+#include "common/ps4.h"
+#endif
+
 #ifdef LOVE_WINDOWS
 extern "C"
 {
@@ -265,6 +269,10 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+#ifdef LOVE_PS4
+	love::ps4::init(argc, argv);
+#endif
+
 	int retval = 0;
 	DoneAction done = DONE_QUIT;
 
@@ -282,6 +290,11 @@ int main(int argc, char **argv)
 
 #ifdef LOVE_ANDROID
 	SDL_Quit();
+#endif
+
+#ifdef LOVE_PS4
+	SDL_Quit();
+	love::ps4::exit(retval);
 #endif
 
 	return retval;

@@ -54,7 +54,9 @@
 #endif
 
 #ifdef PHYSFS_PLATFORM_FREEBSD
+#if !defined(PHYSFS_PLATFORM_PS4)
 #include <sys/sysctl.h>
+#endif
 #endif
 
 
@@ -253,7 +255,11 @@ char *__PHYSFS_platformCalcBaseDir(const char *argv0)
 
     /* Try to avoid using argv0 unless forced to. Try system-specific stuff. */
 
-    #if defined(PHYSFS_PLATFORM_FREEBSD)
+    #if defined(PHYSFS_PLATFORM_PS4)
+    {
+        retval = __PHYSFS_strdup("/app0/eboot.bin");  /* the app's own read-only mount */
+    }
+    #elif defined(PHYSFS_PLATFORM_FREEBSD)
     {
         char fullpath[PATH_MAX];
         size_t buflen = sizeof (fullpath);

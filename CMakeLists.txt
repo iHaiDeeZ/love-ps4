@@ -70,9 +70,14 @@ if(POLICY CMP0072)
 	cmake_policy(SET CMP0072 NEW)
 endif()
 
-find_package(OpenGL)
+if(NOT PS4)
+	find_package(OpenGL)
+endif()
 
-if(MEGA)
+if(PS4)
+	# Dependencies for the PS4 build (OpenOrbis toolchain), see platform/ps4/README.md.
+	include(platform/ps4/dependencies.cmake)
+elseif(MEGA)
 	# LOVE_MSVC_DLLS contains runtime DLLs that should be bundled with the love
 	# binary (in e.g. the installer). Example: msvcp140.dll.
 	set(LOVE_MSVC_DLLS ${MEGA_MSVC_DLLS})
@@ -316,6 +321,14 @@ set(LOVE_SRC_COMMON
 if (APPLE)
 	set(LOVE_SRC_COMMON ${LOVE_SRC_COMMON}
 		src/common/macosx.mm
+	)
+endif()
+
+if (PS4)
+	set(LOVE_SRC_COMMON ${LOVE_SRC_COMMON}
+		src/common/ps4.cpp
+		src/common/ps4.h
+		src/common/ps4_gl.cpp
 	)
 endif()
 
@@ -1749,7 +1762,14 @@ if(MSVC)
 	)
 endif()
 
-add_library(${LOVE_LIB_NAME} SHARED ${LOVE_LIB_SRC} ${LOVE_RC})
+if(PS4)
+	# No dynamic libraries on PS4 homebrew: everything goes into the one executable.
+	set(LOVE_LIB_TYPE STATIC)
+else()
+	set(LOVE_LIB_TYPE SHARED)
+endif()
+
+add_library(${LOVE_LIB_NAME} ${LOVE_LIB_TYPE} ${LOVE_LIB_SRC} ${LOVE_RC})
 target_link_libraries(${LOVE_LIB_NAME} ${LOVE_LINK_LIBRARIES} ${LOVE_3P})
 
 if(LOVE_EXTRA_DEPENDECIES)
@@ -1793,6 +1813,10 @@ if(LOVE_MOVE_DLLS)
 	foreach(DLL ${LOVE_MOVE_DLLS})
 		post_step_move_dll(love ${DLL})
 	endforeach()
+endif()
+
+if(PS4)
+	include(platform/ps4/package.cmake)
 endif()
 
 if (NOT MSVC)

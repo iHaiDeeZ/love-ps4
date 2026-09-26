@@ -34,6 +34,8 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
+#elif defined(LOVE_PS4)
+#include <orbis/libkernel.h>
 #endif
 
 namespace love
@@ -139,6 +141,15 @@ double Timer::getTime()
 	const long sec = now.tv_sec - start.tv_sec;
 	const long nsec = now.tv_nsec - start.tv_nsec;
 	return (double) sec + (double) nsec / 1.0e9;
+}
+
+#elif defined(LOVE_PS4)
+
+double Timer::getTime()
+{
+	static const double frequency = (double) sceKernelGetProcessTimeCounterFrequency();
+	static const uint64_t start = sceKernelGetProcessTimeCounter();
+	return (double) (sceKernelGetProcessTimeCounter() - start) / frequency;
 }
 
 #elif defined(LOVE_MACOSX) || defined(LOVE_IOS)

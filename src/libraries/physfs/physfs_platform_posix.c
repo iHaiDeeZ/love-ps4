@@ -87,6 +87,10 @@ static char *getUserDirByUID(void)
 
 char *__PHYSFS_platformCalcUserDir(void)
 {
+#ifdef PHYSFS_PLATFORM_PS4
+    /* No HOME or user database; /data is the writable storage for homebrew. */
+    return __PHYSFS_strdup("/data/");
+#else
     char *retval = NULL;
     char *envr = getenv("HOME");
 
@@ -115,6 +119,7 @@ char *__PHYSFS_platformCalcUserDir(void)
         retval = getUserDirByUID();
 
     return retval;
+#endif
 } /* __PHYSFS_platformCalcUserDir */
 
 

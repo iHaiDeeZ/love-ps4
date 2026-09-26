@@ -48,7 +48,10 @@
 #		define LOVE_MACOSX 1
 #	endif
 #endif
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+#if defined(__ORBIS__)
+#	define LOVE_PS4 1
+#endif
+#if (defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)) && !defined(LOVE_PS4)
 // I know it's not linux, but it seems most "linux-only" code is bsd-compatible
 #	define LOVE_LINUX 1
 #endif
@@ -125,6 +128,11 @@
 #	define LOVE_LEGENDARY_ACCELEROMETER_AS_JOYSTICK_HACK
 #endif
 
+#if defined(LOVE_PS4)
+	// Piglet only provides OpenGL ES 2.0.
+#	define LOVE_GRAPHICS_USE_OPENGLES
+#endif
+
 // Autotools config.h
 #ifdef HAVE_CONFIG_H
 #	include <../config.h>
@@ -164,7 +172,7 @@
 #endif
 
 // Check we have a sane configuration
-#if !defined(LOVE_WINDOWS) && !defined(LOVE_LINUX) && !defined(LOVE_IOS) && !defined(LOVE_MACOSX) && !defined(LOVE_ANDROID)
+#if !defined(LOVE_WINDOWS) && !defined(LOVE_LINUX) && !defined(LOVE_IOS) && !defined(LOVE_MACOSX) && !defined(LOVE_ANDROID) && !defined(LOVE_PS4)
 #	error Could not detect target platform
 #endif
 #if !defined(LOVE_LITTLE_ENDIAN) && !defined(LOVE_BIG_ENDIAN)

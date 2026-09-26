@@ -1,0 +1,215 @@
+/**
+ * Copyright (c) 2006-2022 LOVE Development Team
+ *
+ * This software is provided 'as-is', without any express or implied
+ * warranty.  In no event will the authors be held liable for any damages
+ * arising from the use of this software.
+ *
+ * Permission is granted to anyone to use this software for any purpose,
+ * including commercial applications, and to alter it and redistribute it
+ * freely, subject to the following restrictions:
+ *
+ * 1. The origin of this software must not be misrepresented; you must not
+ *    claim that you wrote the original software. If you use this software
+ *    in a product, an acknowledgment in the product documentation would be
+ *    appreciated but is not required.
+ * 2. Altered source versions must be plainly marked as such, and must not be
+ *    misrepresented as being the original software.
+ * 3. This notice may not be removed or altered from any source distribution.
+ **/
+
+#include "ps4.h"
+
+#ifdef LOVE_PS4
+
+#include <SDL.h>
+
+#include <orbis/libkernel.h>
+#include <orbis/SystemService.h>
+
+#include <sys/stat.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <vector>
+
+// libc++abi runs thread_local destructors through __cxa_thread_atexit_impl, which the PS4 libc
+// doesn't provide (and create-fself refuses unresolved imports). Keep a per-thread list of
+// destructors and run it from a pthread key destructor when the thread exits.
+namespace
+{
+
+struct ThreadDtor
+{
+	void (*dtor)(void *);
+	void *obj;
+	ThreadDtor *next;
+};
+
+pthread_key_t threadDtorKey;
+pthread_once_t threadDtorOnce = PTHREAD_ONCE_INIT;
+
+void runThreadDtors(void *p)
+{
+	ThreadDtor *head = (ThreadDtor *) p;
+	while (head != nullptr)
+	{
+		ThreadDtor *next = head->next;
+		head->dtor(head->obj);
+		free(head);
+		head = next;
+	}
+}
+
+void createThreadDtorKey()
+{
+	pthread_key_create(&threadDtorKey, runThreadDtors);
+}
+
+} // anonymous namespace
+
+extern "C" int __cxa_thread_atexit_impl(void (*dtor)(void *), void *obj, void * /*dso_symbol*/)
+{
+	pthread_once(&threadDtorOnce, createThreadDtorKey);
+
+	ThreadDtor *entry = (ThreadDtor *) malloc(sizeof(ThreadDtor));
+	if (entry == nullptr)
+		return -1;
+
+	// Destructors run in reverse order of registration, so push to the front.
+	entry->dtor = dtor;
+	entry->obj = obj;
+	entry->next = (ThreadDtor *) pthread_getspecific(threadDtorKey);
+	pthread_setspecific(threadDtorKey, entry);
+	return 0;
+}
+
+namespace love
+{
+namespace ps4
+{
+
+static void log(const char *fmt, const char *arg = "")
+{
+	char buffer[512];
+	snprintf(buffer, sizeof(buffer), fmt, arg);
+	// klog (visible with GoldHEN's klog redirect: nc <ps4-ip> 3232).
+	sceKernelDebugOutText(0, "[love] %s\n", buffer);
+}
+
+static bool fileExists(const std::string &path)
+{
+	struct stat st;
+	return stat(path.c_str(), &st) == 0;
+}
+
+// Piglet (OpenGL ES) can only compile GLSL at runtime when the devkit shader compiler module
+// is loaded next to a matching Piglet module. SDL loads both from SDL_PS4_PIGLET_MODULES_PATH.
+// These are Sony system files and can't be distributed with love; see platform/ps4/README.md.
+static void setupPigletModules()
+{
+	const char *dirs[] = {
+		"/app0/sce_module",               // bundled into the pkg at build time
+		"/data/love/modules",             // user-provided, shared by all love games
+		"/data/self/system/common/lib",   // same location RetroArch and friends use
+	};
+
+	for (const char *dir : dirs)
+	{
+		std::string d = dir;
+		if (fileExists(d + "/libScePigletv2VSH.sprx") && fileExists(d + "/libSceShaccVSH.sprx"))
+		{
+			log("shader compiler modules found in %s", dir);
+			SDL_SetHint(SDL_HINT_PS4_PIGLET_MODULES_PATH, dir);
+			return;
+		}
+	}
+
+	log("libSceShaccVSH.sprx / libScePigletv2VSH.sprx not found: shaders can't be compiled, graphics will fail to start. %s",
+	    "See platform/ps4/README.md.");
+}
+
+static void onExit()
+{
+	// The raw process exit syscall is not allowed for apps; ask the system to close us instead.
+	log("exiting");
+	sceSystemServiceLoadExec("exit", nullptr);
+	for (;;)
+		sceKernelUsleep(100000);
+}
+
+std::string findGame()
+{
+	const char *candidates[] = {
+		"/app0/game.love",
+		"/app0/game",
+		"/data/love/game.love",
+		"/data/love/game",
+	};
+
+	for (const char *path : candidates)
+	{
+		std::string p = path;
+		bool isLoveFile = p.size() > 5 && p.compare(p.size() - 5, 5, ".love") == 0;
+		if (isLoveFile ? fileExists(p) : fileExists(p + "/main.lua"))
+			return p;
+	}
+
+	return "";
+}
+
+void init(int &argc, char **&argv)
+{
+	log("LOVE for PS4 starting");
+
+	atexit(onExit);
+	setupPigletModules();
+
+	// Games that check love._os / love.system.getOS() see "PS4". No window manager: always fullscreen.
+	SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
+
+	if (argc > 1)
+		return;
+
+	std::string game = findGame();
+	if (game.empty())
+	{
+		log("no game found, showing the no-game screen");
+		return;
+	}
+
+	log("game: %s", game.c_str());
+
+	static std::vector<char *> args;
+	static std::string gamearg;
+	gamearg = game;
+	args.clear();
+	args.push_back(argc > 0 ? argv[0] : (char *) "/app0/eboot.bin");
+	args.push_back(&gamearg[0]);
+	args.push_back(nullptr);
+
+	argc = 2;
+	argv = args.data();
+}
+
+std::string getExecutablePath()
+{
+	return "/app0/eboot.bin";
+}
+
+std::string getAppdataDirectory()
+{
+	return "/data";
+}
+
+void exit(int status)
+{
+	log(status == 0 ? "quit" : "quit with error%s", "");
+	onExit();
+}
+
+} // ps4
+} // love
+
+#endif // LOVE_PS4

@@ -241,6 +241,11 @@ std::vector<Window::ContextAttribs> Window::getContextAttribsList() const
 	// Do we want a debug context?
 	bool debug = love::graphics::isDebugEnabled();
 
+#ifdef LOVE_PS4
+	// Piglet is OpenGL ES 2.0 only; don't bother trying anything else.
+	return std::vector<ContextAttribs>{{2, 0, true, debug}};
+#endif
+
 	const char *preferGL2hint = SDL_GetHint("LOVE_GRAPHICS_USE_GL2");
 	bool preferGL2 = (preferGL2hint != nullptr && preferGL2hint[0] != '0');
 
@@ -437,6 +442,21 @@ bool Window::setWindow(int width, int height, WindowSettings *settings)
 		width = mode.w;
 		height = mode.h;
 	}
+
+#ifdef LOVE_PS4
+	// The TV output has one fixed resolution, so the window always covers the whole screen.
+	// Games get the real size from love.graphics.getDimensions() and scale themselves.
+	{
+		SDL_DisplayMode mode = {};
+		SDL_GetDesktopDisplayMode(f.display, &mode);
+		width = mode.w;
+		height = mode.h;
+		f.fullscreen = true;
+		f.fstype = FULLSCREEN_DESKTOP;
+		f.resizable = false;
+		f.borderless = false;
+	}
+#endif
 
 	Uint32 sdlflags = SDL_WINDOW_OPENGL;
 

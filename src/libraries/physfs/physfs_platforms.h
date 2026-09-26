@@ -53,6 +53,11 @@
 #  define PHYSFS_PLATFORM_SOLARIS 1
 #  define PHYSFS_PLATFORM_UNIX 1
 #  define PHYSFS_PLATFORM_POSIX 1
+#elif defined(__ORBIS__)  /* PS4 (OpenOrbis): FreeBSD-based, but no BSD userland APIs. */
+#  define PHYSFS_PLATFORM_PS4 1
+#  define PHYSFS_PLATFORM_UNIX 1
+#  define PHYSFS_PLATFORM_POSIX 1
+#  define PHYSFS_NO_CDROM_SUPPORT 1
 #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
 #  define PHYSFS_PLATFORM_FREEBSD 1
 #  define PHYSFS_PLATFORM_BSD 1

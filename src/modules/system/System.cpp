@@ -74,6 +74,8 @@ std::string System::getOS() const
 	return "Windows";
 #elif defined(LOVE_ANDROID)
 	return "Android";
+#elif defined(LOVE_PS4)
+	return "PS4";
 #elif defined(LOVE_LINUX)
 	return "Linux";
 #else
