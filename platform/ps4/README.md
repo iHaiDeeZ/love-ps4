@@ -57,6 +57,12 @@ They are Sony files and are **not included here**. Obtain them yourself, then ei
 LÖVE looks in `/app0/sce_module`, then `/data/love/modules`, then `/data/self/system/common/lib`.
 It logs to klog which one it used. Without the modules, graphics fail to start.
 
+Copy them with GoldHEN's FTP server; the sizes must be exactly 744,208 bytes
+(`libScePigletv2VSH.sprx`) and 10,394,272 bytes (`libSceShaccVSH.sprx`). If they're found but the
+log shows `[rtld] syscall load_prx failed due to 0x0000000d` followed by "No available video device",
+the console refused to load them (permission denied): usually files copied in a way that left them
+unreadable for games, or files from another source that a retail console can't load.
+
 ## Building
 
 On Ubuntu (26.04 tested; WSL2 works):

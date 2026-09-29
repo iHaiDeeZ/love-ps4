@@ -18,6 +18,10 @@ Ported to PS4 by **ShiroKlein**. This is an unofficial port and isn't affiliated
 ## Installing
 
 1. On the console, create the folder `/data/love/modules/` and copy both `.sprx` files into it.
+   **Use GoldHEN's FTP server** for this: files copied some other ways can end up unreadable for
+   games. Check that the sizes match exactly:
+   - `libScePigletv2VSH.sprx`: 744,208 bytes
+   - `libSceShaccVSH.sprx`: 10,394,272 bytes
 2. Download the latest `.pkg` from the [Releases](https://github.com/iHaiDeeZ/love-ps4/releases) page:
    - **LÖVE** is the player for your games.
    - **LÖVE PS4 Test** is a small test app. Use it to check that everything works.
@@ -55,7 +59,8 @@ you make games, see [Packaging your own game](#for-game-makers) below.
 
 | Problem | What to try |
 |---|---|
-| The app goes straight back to the home screen | Check that both `.sprx` files are in `/data/love/modules/` with exactly those names. |
+| The app goes straight back to the home screen, or shows an empty screen | Check that both `.sprx` files are in `/data/love/modules/` with exactly those names. |
+| The log shows `load_prx failed due to 0x0000000d` and "No available video device" | The console found the files but refused to load them. Delete both and copy them again with GoldHEN's FTP server, and check their sizes (see [Installing](#installing)). Files from another source than RetroArch for PS4 may not load at all. |
 | Blue screen with an error message | The game hit an error; the message says where. Press **Options** to quit. |
 | A controller doesn't respond | Make sure it's signed in to a user or guest. |
 | Anything else | Look at `/data/love/log.txt`. |
